@@ -1065,6 +1065,30 @@ body.dark-mode .form-error-banner {
   padding: 0 10px;
 }
 
+.guest-mode-btn {
+  width: 100%;
+  padding: 10px;
+  background: var(--surface-bg);
+  color: var(--text-main);
+  border: 1px solid var(--primary);
+  border-radius: var(--radius-sm);
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.guest-mode-btn:hover {
+  background: var(--primary-light);
+  color: var(--primary);
+  transform: translateY(-1px);
+}
+
 .demo-login-btn {
   width: 100%;
   padding: 9px;

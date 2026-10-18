@@ -57,6 +57,7 @@ const authConfirmPassword = document.getElementById('authConfirmPassword');
 const confirmPasswordGroup = document.getElementById('confirmPasswordGroup');
 const authSubmitBtn = document.getElementById('authSubmitBtn');
 const demoLoginBtn = document.getElementById('demoLoginBtn');
+const guestModeBtn = document.getElementById('guestModeBtn');
 
 // Initialize Marked & Highlight.js
 if (typeof marked !== 'undefined') {
@@ -108,6 +109,14 @@ document.addEventListener('DOMContentLoaded', () => {
     createNewChat();
   } else {
     renderCurrentChat();
+  }
+
+  // If first time visiting (not logged in and hasn't chosen guest mode), show choice modal
+  const hasChosenGuest = localStorage.getItem('chabita_guest_mode');
+  if (!authToken && !hasChosenGuest) {
+    setTimeout(() => {
+      openAuthModal('login');
+    }, 400);
   }
 });
 
@@ -203,6 +212,9 @@ function bindEventListeners() {
 
   authForm.addEventListener('submit', handleAuthSubmit);
   demoLoginBtn.addEventListener('click', handleDemoLogin);
+  if (guestModeBtn) {
+    guestModeBtn.addEventListener('click', handleGuestMode);
+  }
 }
 
 // --- Authentication Logic ---
@@ -235,13 +247,13 @@ function updateAuthUI(username) {
   if (username) {
     userProfileAvatar.textContent = username.charAt(0).toUpperCase();
     userProfileName.textContent = username;
-    userProfileStatus.textContent = 'Logged In';
+    userProfileStatus.textContent = 'Account Active';
     authActionBtn.textContent = 'Log Out';
     navAuthText.textContent = `Sign Out (${username})`;
   } else {
-    userProfileAvatar.textContent = '?';
+    userProfileAvatar.textContent = '🚀';
     userProfileName.textContent = 'Guest User';
-    userProfileStatus.textContent = 'Not signed in';
+    userProfileStatus.textContent = 'Guest Mode · Local storage';
     authActionBtn.textContent = 'Sign In';
     navAuthText.textContent = 'Sign In';
   }
@@ -342,6 +354,15 @@ async function handleDemoLogin() {
   authPassword.value = 'chabita123';
   switchAuthTab('login');
   await handleAuthSubmit();
+}
+
+function handleGuestMode() {
+  localStorage.setItem('chabita_guest_mode', 'true');
+  currentUser = null;
+  authToken = null;
+  updateAuthUI(null);
+  closeAuthModal();
+  chatInput.focus();
 }
 
 async function handleLogout() {
