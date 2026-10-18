@@ -48,6 +48,16 @@
         </div>
       </div>
 
+      <!-- User Profile / Auth Card -->
+      <div class="user-profile-card" id="userProfileCard">
+        <div class="user-profile-avatar" id="userProfileAvatar">?</div>
+        <div class="user-profile-info">
+          <span class="user-profile-name" id="userProfileName">Guest User</span>
+          <span class="user-profile-status" id="userProfileStatus">Not signed in</span>
+        </div>
+        <button class="user-profile-action-btn" id="authActionBtn">Sign In</button>
+      </div>
+
       <div class="sidebar-footer">
         <div class="status-indicator">
           <span class="status-dot"></span>
@@ -103,6 +113,12 @@
               <line x1="12" y1="15" x2="12" y2="3"></line>
             </svg>
             <span>Export</span>
+          </button>
+
+          <!-- Top Nav User Action -->
+          <button class="action-pill-btn" id="navAuthBtn" title="Sign In or View Account">
+            <span id="navAuthIcon">👤</span>
+            <span id="navAuthText">Sign In</span>
           </button>
         </div>
       </header>
@@ -192,7 +208,63 @@
     </main>
   </div>
 
+  <!-- Authentication Modal -->
+  <div class="modal-backdrop" id="authModal" style="display: none;">
+    <div class="modal-card">
+      <button class="modal-close-btn" id="closeAuthModalBtn" title="Close modal">✕</button>
+      <div class="modal-header">
+        <img src="favicon.svg" alt="Chabita" class="modal-avatar">
+        <h2 id="authModalTitle">Welcome to Chabita</h2>
+        <p id="authModalSubtitle">Sign in to save and sync your conversations</p>
+      </div>
+
+      <!-- Tab Switcher -->
+      <div class="auth-tabs">
+        <button class="auth-tab active" id="tabSignIn">Sign In</button>
+        <button class="auth-tab" id="tabSignUp">Create Account</button>
+      </div>
+
+      <!-- Auth Form -->
+      <form id="authForm" onsubmit="return false;">
+        <div class="form-error-banner" id="authErrorBanner" style="display: none;"></div>
+
+        <div class="form-group">
+          <label for="authUsername">Username</label>
+          <div class="input-with-icon">
+            <span class="field-icon">👤</span>
+            <input type="text" id="authUsername" placeholder="e.g. alex" autocomplete="username" required>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="authPassword">Password</label>
+          <div class="input-with-icon">
+            <span class="field-icon">🔒</span>
+            <input type="password" id="authPassword" placeholder="Minimum 6 characters" autocomplete="current-password" required>
+          </div>
+        </div>
+
+        <div class="form-group" id="confirmPasswordGroup" style="display: none;">
+          <label for="authConfirmPassword">Confirm Password</label>
+          <div class="input-with-icon">
+            <span class="field-icon">🔒</span>
+            <input type="password" id="authConfirmPassword" placeholder="Re-enter your password" autocomplete="new-password">
+          </div>
+        </div>
+
+        <button type="submit" class="submit-auth-btn" id="authSubmitBtn">Sign In</button>
+
+        <div class="auth-divider">
+          <span>or</span>
+        </div>
+
+        <button type="button" class="demo-login-btn" id="demoLoginBtn">
+          ✨ Instant Demo Login (username: demo)
+        </button>
+      </form>
+    </div>
+  </div>
+
   <script src="app.js"></script>
 </body>
 </html>
-

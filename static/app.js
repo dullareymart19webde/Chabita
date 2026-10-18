@@ -10,6 +10,11 @@ let currentMode = 'warm_simple';
 let recognition = null;
 let isRecording = false;
 
+// Auth State
+let authToken = localStorage.getItem('chabita_auth_token') || null;
+let currentUser = null;
+let authModalMode = 'login'; // 'login' or 'register'
+
 // DOM Elements
 const chatContainer = document.getElementById('chatContainer');
 const messagesList = document.getElementById('messagesList');
@@ -29,6 +34,30 @@ const sidebar = document.getElementById('sidebar');
 const toggleSidebarBtn = document.getElementById('toggleSidebarBtn');
 const closeSidebarBtn = document.getElementById('closeSidebarBtn');
 
+// Auth DOM Elements
+const userProfileCard = document.getElementById('userProfileCard');
+const userProfileAvatar = document.getElementById('userProfileAvatar');
+const userProfileName = document.getElementById('userProfileName');
+const userProfileStatus = document.getElementById('userProfileStatus');
+const authActionBtn = document.getElementById('authActionBtn');
+const navAuthBtn = document.getElementById('navAuthBtn');
+const navAuthText = document.getElementById('navAuthText');
+
+const authModal = document.getElementById('authModal');
+const closeAuthModalBtn = document.getElementById('closeAuthModalBtn');
+const authModalTitle = document.getElementById('authModalTitle');
+const authModalSubtitle = document.getElementById('authModalSubtitle');
+const tabSignIn = document.getElementById('tabSignIn');
+const tabSignUp = document.getElementById('tabSignUp');
+const authForm = document.getElementById('authForm');
+const authErrorBanner = document.getElementById('authErrorBanner');
+const authUsername = document.getElementById('authUsername');
+const authPassword = document.getElementById('authPassword');
+const authConfirmPassword = document.getElementById('authConfirmPassword');
+const confirmPasswordGroup = document.getElementById('confirmPasswordGroup');
+const authSubmitBtn = document.getElementById('authSubmitBtn');
+const demoLoginBtn = document.getElementById('demoLoginBtn');
+
 // Initialize Marked & Highlight.js
 if (typeof marked !== 'undefined') {
   marked.setOptions({
@@ -47,8 +76,6 @@ if (typeof marked !== 'undefined') {
 
 // Custom renderer for code blocks with copy header
 const renderer = new marked.Renderer();
-const originalCodeRenderer = renderer.code ? renderer.code.bind(renderer) : null;
-
 renderer.code = function(code, language) {
   const lang = language || 'code';
   const highlighted = (typeof hljs !== 'undefined' && lang && hljs.getLanguage(lang))
@@ -71,12 +98,12 @@ marked.use({ renderer });
 // Initialization
 document.addEventListener('DOMContentLoaded', () => {
   loadTheme();
+  checkAuthStatus();
   loadHistoryFromStorage();
   setupSpeechRecognition();
   bindEventListeners();
   autoResizeTextarea();
 
-  // If no chat exists, create a new one
   if (!currentChatId || !getChat(currentChatId)) {
     createNewChat();
   } else {
@@ -148,6 +175,197 @@ function bindEventListeners() {
   if (voiceInputBtn) {
     voiceInputBtn.addEventListener('click', toggleVoiceInput);
   }
+
+  // Auth Modal Triggers
+  authActionBtn.addEventListener('click', () => {
+    if (currentUser) {
+      handleLogout();
+    } else {
+      openAuthModal('login');
+    }
+  });
+
+  navAuthBtn.addEventListener('click', () => {
+    if (currentUser) {
+      handleLogout();
+    } else {
+      openAuthModal('login');
+    }
+  });
+
+  closeAuthModalBtn.addEventListener('click', closeAuthModal);
+  authModal.addEventListener('click', (e) => {
+    if (e.target === authModal) closeAuthModal();
+  });
+
+  tabSignIn.addEventListener('click', () => switchAuthTab('login'));
+  tabSignUp.addEventListener('click', () => switchAuthTab('register'));
+
+  authForm.addEventListener('submit', handleAuthSubmit);
+  demoLoginBtn.addEventListener('click', handleDemoLogin);
+}
+
+// --- Authentication Logic ---
+async function checkAuthStatus() {
+  if (!authToken) {
+    updateAuthUI(null);
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/auth/me', {
+      headers: { 'Authorization': `Bearer ${authToken}` }
+    });
+    const data = await res.json();
+    if (data.authenticated && data.username) {
+      currentUser = data.username;
+      updateAuthUI(currentUser);
+    } else {
+      authToken = null;
+      localStorage.removeItem('chabita_auth_token');
+      updateAuthUI(null);
+    }
+  } catch (err) {
+    console.warn('Could not verify auth token:', err);
+    updateAuthUI(null);
+  }
+}
+
+function updateAuthUI(username) {
+  if (username) {
+    userProfileAvatar.textContent = username.charAt(0).toUpperCase();
+    userProfileName.textContent = username;
+    userProfileStatus.textContent = 'Logged In';
+    authActionBtn.textContent = 'Log Out';
+    navAuthText.textContent = `Sign Out (${username})`;
+  } else {
+    userProfileAvatar.textContent = '?';
+    userProfileName.textContent = 'Guest User';
+    userProfileStatus.textContent = 'Not signed in';
+    authActionBtn.textContent = 'Sign In';
+    navAuthText.textContent = 'Sign In';
+  }
+}
+
+function openAuthModal(mode = 'login') {
+  authErrorBanner.style.display = 'none';
+  authErrorBanner.textContent = '';
+  switchAuthTab(mode);
+  authModal.style.display = 'flex';
+  authUsername.focus();
+}
+
+function closeAuthModal() {
+  authModal.style.display = 'none';
+}
+
+function switchAuthTab(mode) {
+  authModalMode = mode;
+  authErrorBanner.style.display = 'none';
+
+  if (mode === 'login') {
+    tabSignIn.classList.add('active');
+    tabSignUp.classList.remove('active');
+    authModalTitle.textContent = 'Welcome Back! 👋';
+    authModalSubtitle.textContent = 'Sign in to access your saved conversations';
+    confirmPasswordGroup.style.display = 'none';
+    authConfirmPassword.removeAttribute('required');
+    authSubmitBtn.textContent = 'Sign In';
+  } else {
+    tabSignUp.classList.add('active');
+    tabSignIn.classList.remove('active');
+    authModalTitle.textContent = 'Create an Account 🌸';
+    authModalSubtitle.textContent = 'Join Chabita for a personalized AI assistant experience';
+    confirmPasswordGroup.style.display = 'block';
+    authConfirmPassword.setAttribute('required', 'true');
+    authSubmitBtn.textContent = 'Create Account';
+  }
+}
+
+async function handleAuthSubmit(e) {
+  if (e) e.preventDefault();
+  const username = authUsername.value.trim();
+  const password = authPassword.value.trim();
+  const confirmPassword = authConfirmPassword.value.trim();
+
+  authErrorBanner.style.display = 'none';
+
+  if (!username || !password) {
+    showAuthError('Please fill in both username and password.');
+    return;
+  }
+
+  if (authModalMode === 'register') {
+    if (password !== confirmPassword) {
+      showAuthError('Passwords do not match. Please check again.');
+      return;
+    }
+  }
+
+  const endpoint = authModalMode === 'register' ? '/api/auth/register' : '/api/auth/login';
+
+  try {
+    authSubmitBtn.disabled = true;
+    authSubmitBtn.textContent = 'Please wait...';
+
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      showAuthError(data.detail || 'Authentication failed. Please try again.');
+      return;
+    }
+
+    if (data.token) {
+      authToken = data.token;
+      currentUser = data.username;
+      localStorage.setItem('chabita_auth_token', authToken);
+      updateAuthUI(currentUser);
+      closeAuthModal();
+      authForm.reset();
+    }
+  } catch (err) {
+    showAuthError('Network error connecting to the server. Please check your connection.');
+  } finally {
+    authSubmitBtn.disabled = false;
+    authSubmitBtn.textContent = authModalMode === 'register' ? 'Create Account' : 'Sign In';
+  }
+}
+
+async function handleDemoLogin() {
+  authUsername.value = 'demo';
+  authPassword.value = 'chabita123';
+  switchAuthTab('login');
+  await handleAuthSubmit();
+}
+
+async function handleLogout() {
+  if (confirm('Are you sure you want to log out?')) {
+    try {
+      if (authToken) {
+        await fetch('/api/auth/logout', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+      }
+    } catch (e) {
+      console.warn('Logout request failed:', e);
+    }
+    authToken = null;
+    currentUser = null;
+    localStorage.removeItem('chabita_auth_token');
+    updateAuthUI(null);
+  }
+}
+
+function showAuthError(msg) {
+  authErrorBanner.textContent = msg;
+  authErrorBanner.style.display = 'block';
 }
 
 // Textarea auto-resize
@@ -385,9 +603,14 @@ async function handleSendMessage() {
       temperature: 0.7
     };
 
+    const headers = { 'Content-Type': 'application/json' };
+    if (authToken) {
+      headers['Authorization'] = `Bearer ${authToken}`;
+    }
+
     const response = await fetch('/api/chat', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: headers,
       body: JSON.stringify(payload)
     });
 
@@ -506,7 +729,7 @@ function toggleReadAloud(text, btn) {
 
   const utterance = new SpeechSynthesisUtterance(cleanText);
   utterance.rate = 1.0;
-  utterance.pitch = 1.05; // Slightly warmer/friendly pitch
+  utterance.pitch = 1.05;
 
   const span = btn.querySelector('span');
   span.textContent = 'Stop';
@@ -613,4 +836,3 @@ function toggleTheme() {
   localStorage.setItem('chabita_theme', isDark ? 'dark' : 'light');
   themeIcon.textContent = isDark ? '☀️' : '🌙';
 }
-

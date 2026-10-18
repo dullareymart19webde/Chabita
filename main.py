@@ -1,8 +1,11 @@
 import os
 import json
+import sqlite3
+import hashlib
+import secrets
 import logging
 from typing import List, Optional
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Header
 from fastapi.responses import StreamingResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -16,11 +19,12 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("chabita")
 
-app = FastAPI(title="Chabita AI Assistant", version="1.0.0")
+app = FastAPI(title="Chabita AI Assistant", version="1.1.0")
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 MODEL_NAME = os.getenv("DEFAULT_MODEL", "gemini-3.8-flash")
 BASE_GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta"
+DB_PATH = os.path.join(os.path.dirname(__file__), "chabita.db")
 
 # Chabita Personality Prompts
 BASE_PERSONA = (
@@ -43,8 +47,79 @@ MODES = {
     "detailed": BASE_PERSONA + "\n\nAdditional Directive: Provide step-by-step deep dives, code explanations, and thorough examples while maintaining your friendly, accessible warmth."
 }
 
+# --- Database & Auth Setup ---
+def get_db():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+def init_db():
+    with get_db() as conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                salt TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS sessions (
+                token TEXT PRIMARY KEY,
+                user_id INTEGER NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users (id)
+            )
+        """)
+        # Create a friendly default demo account if no users exist
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM users")
+        if cursor.fetchone()[0] == 0:
+            salt = secrets.token_hex(16)
+            pwd_hash = hashlib.pbkdf2_hmac("sha256", "chabita123".encode("utf-8"), bytes.fromhex(salt), 100000).hex()
+            cursor.execute(
+                "INSERT INTO users (username, password_hash, salt) VALUES (?, ?, ?)",
+                ("demo", pwd_hash, salt)
+            )
+            conn.commit()
+            logger.info("Created default demo user: username='demo', password='chabita123'")
+
+init_db()
+
+def hash_password(password: str, salt: Optional[str] = None):
+    if not salt:
+        salt = secrets.token_hex(16)
+    pwd_hash = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), bytes.fromhex(salt), 100000).hex()
+    return pwd_hash, salt
+
+def verify_password(password: str, stored_hash: str, salt: str) -> bool:
+    pwd_hash, _ = hash_password(password, salt)
+    return secrets.compare_digest(pwd_hash, stored_hash)
+
+def get_user_from_token(token: Optional[str]):
+    if not token:
+        return None
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT u.id, u.username 
+            FROM sessions s 
+            JOIN users u ON s.user_id = u.id 
+            WHERE s.token = ?
+        """, (token,))
+        row = cursor.fetchone()
+        if row:
+            return {"id": row["id"], "username": row["username"]}
+    return None
+
+# --- Models ---
+class AuthRequest(BaseModel):
+    username: str
+    password: str
+
 class MessageItem(BaseModel):
-    role: str  # "user" or "assistant" or "model"
+    role: str
     content: str
 
 class ChatRequest(BaseModel):
@@ -52,6 +127,71 @@ class ChatRequest(BaseModel):
     mode: Optional[str] = "warm_simple"
     temperature: Optional[float] = 0.7
 
+# --- Auth Endpoints ---
+@app.post("/api/auth/register")
+async def register(req: AuthRequest):
+    username = req.username.strip()
+    password = req.password.strip()
+
+    if len(username) < 3 or len(username) > 30:
+        raise HTTPException(status_code=400, detail="Username must be between 3 and 30 characters.")
+    if len(password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters.")
+
+    pwd_hash, salt = hash_password(password)
+    try:
+        with get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "INSERT INTO users (username, password_hash, salt) VALUES (?, ?, ?)",
+                (username, pwd_hash, salt)
+            )
+            user_id = cursor.lastrowid
+            token = secrets.token_hex(32)
+            cursor.execute("INSERT INTO sessions (token, user_id) VALUES (?, ?)", (token, user_id))
+            conn.commit()
+            return {"success": True, "token": token, "username": username}
+    except sqlite3.IntegrityError:
+        raise HTTPException(status_code=400, detail="This username is already taken. Please choose another one.")
+
+@app.post("/api/auth/login")
+async def login(req: AuthRequest):
+    username = req.username.strip()
+    password = req.password.strip()
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, username, password_hash, salt FROM users WHERE username = ?", (username,))
+        row = cursor.fetchone()
+        if not row or not verify_password(password, row["password_hash"], row["salt"]):
+            raise HTTPException(status_code=401, detail="Invalid username or password. Please try again.")
+
+        token = secrets.token_hex(32)
+        cursor.execute("INSERT INTO sessions (token, user_id) VALUES (?, ?)", (token, row["id"]))
+        conn.commit()
+        return {"success": True, "token": token, "username": row["username"]}
+
+@app.get("/api/auth/me")
+async def get_current_user(authorization: Optional[str] = Header(None)):
+    token = None
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization.split("Bearer ")[1].strip()
+
+    user = get_user_from_token(token)
+    if user:
+        return {"authenticated": True, "username": user["username"]}
+    return {"authenticated": False}
+
+@app.post("/api/auth/logout")
+async def logout(authorization: Optional[str] = Header(None)):
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization.split("Bearer ")[1].strip()
+        with get_db() as conn:
+            conn.execute("DELETE FROM sessions WHERE token = ?", (token,))
+            conn.commit()
+    return {"success": True}
+
+# --- Health Check ---
 @app.get("/api/health")
 async def health_check():
     has_key = bool(GEMINI_API_KEY)
@@ -63,17 +203,12 @@ async def health_check():
     }
 
 def format_gemini_contents(messages: List[MessageItem]):
-    """Convert chat messages into Google Gemini API contents array."""
     gemini_contents = []
-    
     for msg in messages:
-        # Map assistant -> model
         role = "model" if msg.role in ("assistant", "model") else "user"
         content_text = msg.content.strip()
         if not content_text:
             continue
-            
-        # Avoid consecutive same-role messages by combining them if necessary
         if gemini_contents and gemini_contents[-1]["role"] == role:
             gemini_contents[-1]["parts"][0]["text"] += "\n\n" + content_text
         else:
@@ -81,13 +216,11 @@ def format_gemini_contents(messages: List[MessageItem]):
                 "role": role,
                 "parts": [{"text": content_text}]
             })
-            
-    # Ensure starts with user
     if gemini_contents and gemini_contents[0]["role"] != "user":
         gemini_contents.insert(0, {"role": "user", "parts": [{"text": "Hello"}]})
-        
     return gemini_contents
 
+# --- Chat Endpoints ---
 @app.post("/api/chat")
 async def chat_stream(request: ChatRequest):
     api_key = os.getenv("GEMINI_API_KEY", GEMINI_API_KEY)
@@ -199,10 +332,8 @@ frontend_dir = public_dir if os.path.exists(public_dir) else static_dir
 if os.path.exists(frontend_dir):
     app.mount("/", StaticFiles(directory=frontend_dir, html=True), name="static")
 
-
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 8000))
     print(f"Starting Chabita AI on port {port}...")
     uvicorn.run("main:app", host="0.0.0.0", port=port, reload=False)
-
