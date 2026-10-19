@@ -89,6 +89,207 @@ const imagePreviewName = document.getElementById('imagePreviewName');
 const imagePreviewSub = document.getElementById('imagePreviewSub');
 const removeImageBtn = document.getElementById('removeImageBtn');
 
+// Slash Commands DOM Elements (Feature: Quick Shortcuts)
+const slashCommandsPopup = document.getElementById('slashCommandsPopup');
+const slashCommandsList = document.getElementById('slashCommandsList');
+
+// --- Slash Commands (Feature: Quick Shortcuts e.g. /image cat) ---
+const SLASH_COMMANDS = [
+  {
+    name: '/image',
+    syntax: '/image <prompt>',
+    alias: '/img',
+    description: 'Generate an AI image (e.g. /image cat)',
+    value: '/image ',
+    icon: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>`
+  },
+  {
+    name: '/clear',
+    syntax: '/clear',
+    alias: '/new',
+    description: 'Start a fresh new conversation',
+    value: null,
+    action: () => createNewChat(),
+    icon: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>`
+  },
+  {
+    name: '/export',
+    syntax: '/export',
+    description: 'Download conversation as Markdown file',
+    value: null,
+    action: () => exportConversation(),
+    icon: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>`
+  },
+  {
+    name: '/share',
+    syntax: '/share',
+    description: 'Create a shareable read-only link',
+    value: null,
+    action: () => handleShareChat(),
+    icon: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>`
+  },
+  {
+    name: '/help',
+    syntax: '/help',
+    description: 'Show available shortcuts and commands',
+    value: null,
+    action: () => showSlashCommandsHelp(),
+    icon: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>`
+  }
+];
+
+let selectedSlashIndex = 0;
+let currentFilteredCommands = [];
+
+function renderSlashCommandsPopup(commands) {
+  if (!slashCommandsPopup || !slashCommandsList) return;
+  currentFilteredCommands = commands;
+  selectedSlashIndex = Math.min(selectedSlashIndex, commands.length - 1);
+  if (selectedSlashIndex < 0) selectedSlashIndex = 0;
+
+  slashCommandsList.innerHTML = '';
+  commands.forEach((cmd, idx) => {
+    const item = document.createElement('div');
+    item.className = `slash-command-item ${idx === selectedSlashIndex ? 'selected' : ''}`;
+    item.innerHTML = `
+      <div class="slash-command-icon">${cmd.icon}</div>
+      <div class="slash-command-info">
+        <span class="slash-command-name">${escapeHtml(cmd.syntax)}</span>
+        <span class="slash-command-desc">${escapeHtml(cmd.description)}</span>
+      </div>
+    `;
+    item.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      applySlashCommand(cmd);
+    });
+    slashCommandsList.appendChild(item);
+  });
+
+  slashCommandsPopup.style.display = 'block';
+}
+
+function hideSlashCommandsPopup() {
+  if (slashCommandsPopup) slashCommandsPopup.style.display = 'none';
+  selectedSlashIndex = 0;
+  currentFilteredCommands = [];
+}
+
+function applySlashCommand(cmd) {
+  hideSlashCommandsPopup();
+  if (cmd.value) {
+    chatInput.value = cmd.value;
+    chatInput.focus();
+    autoResizeTextarea();
+  } else if (cmd.action) {
+    chatInput.value = '';
+    autoResizeTextarea();
+    cmd.action();
+  }
+}
+
+function handleChatInputKeydown(e) {
+  const isPopupOpen = slashCommandsPopup && slashCommandsPopup.style.display !== 'none';
+
+  if (isPopupOpen) {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      selectedSlashIndex = (selectedSlashIndex + 1) % currentFilteredCommands.length;
+      renderSlashCommandsPopup(currentFilteredCommands);
+      return;
+    }
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      selectedSlashIndex = (selectedSlashIndex - 1 + currentFilteredCommands.length) % currentFilteredCommands.length;
+      renderSlashCommandsPopup(currentFilteredCommands);
+      return;
+    }
+    if (e.key === 'Tab' || e.key === 'Enter') {
+      const val = chatInput.value.trim();
+      if (!val.includes(' ') && currentFilteredCommands.length > 0) {
+        e.preventDefault();
+        applySlashCommand(currentFilteredCommands[selectedSlashIndex]);
+        return;
+      }
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      hideSlashCommandsPopup();
+      return;
+    }
+  }
+
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    hideSlashCommandsPopup();
+    handleSendMessage();
+  }
+}
+
+function handleChatInputChange() {
+  autoResizeTextarea();
+
+  const val = chatInput.value;
+  if (val.startsWith('/')) {
+    if (val.includes(' ')) {
+      hideSlashCommandsPopup();
+      return;
+    }
+    const query = val.slice(1).toLowerCase().trim();
+    const matched = SLASH_COMMANDS.filter(cmd =>
+      cmd.name.toLowerCase().includes(query) ||
+      (cmd.alias && cmd.alias.toLowerCase().includes(query))
+    );
+    if (matched.length > 0) {
+      renderSlashCommandsPopup(matched);
+    } else {
+      hideSlashCommandsPopup();
+    }
+  } else {
+    hideSlashCommandsPopup();
+  }
+}
+
+function showSlashCommandsHelpNotice(msg) {
+  let chat = getChat(currentChatId);
+  if (!chat) {
+    createNewChat();
+    chat = getChat(currentChatId);
+  }
+  if (!chat) return;
+
+  if (welcomeHero) welcomeHero.style.display = 'none';
+  appendMessageToDOM('assistant', msg);
+  scrollToBottom();
+}
+
+function showSlashCommandsHelp() {
+  let chat = getChat(currentChatId);
+  if (!chat) {
+    createNewChat();
+    chat = getChat(currentChatId);
+  }
+  if (!chat) return;
+
+  if (welcomeHero) welcomeHero.style.display = 'none';
+
+  chat.messages.push({ role: 'user', content: '/help' });
+  const helpText = `### Shortcuts & Slash Commands\n\n` +
+    `* **/image &lt;prompt&gt;** (or **/img**) — Generate an AI image directly. For example:\n` +
+    `  * \`/image cat\`\n` +
+    `  * \`/image cozy cabin in snow at sunset\`\n` +
+    `  * \`/image futuristic cyber city with neon lights\`\n` +
+    `* **/clear** — Start a fresh new conversation\n` +
+    `* **/export** — Download current chat as a Markdown file\n` +
+    `* **/share** — Create a shareable read-only link for this chat\n` +
+    `* **/help** — Show this shortcut guide\n\n` +
+    `*Tip: Type \`/\` in the chat input to browse and autocomplete commands.*`;
+
+  chat.messages.push({ role: 'assistant', content: helpText });
+  saveChatToStorage(chat);
+  renderCurrentChat();
+  scrollToBottom();
+}
+
 // Share Modal DOM Elements (Feature 3)
 const shareChatBtn = document.getElementById('shareChatBtn');
 const shareModal = document.getElementById('shareModal');
@@ -225,17 +426,19 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 // --- Event Listeners ---
 function bindEventListeners() {
-  // Send message
+  // Send message & Slash Commands
   if (sendBtn) sendBtn.addEventListener('click', handleSendMessage);
   if (chatInput) {
-    chatInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        handleSendMessage();
-      }
-    });
-    chatInput.addEventListener('input', autoResizeTextarea);
+    chatInput.addEventListener('keydown', handleChatInputKeydown);
+    chatInput.addEventListener('input', handleChatInputChange);
   }
+
+  // Dismiss slash popup on outside click
+  document.addEventListener('click', (e) => {
+    if (slashCommandsPopup && !slashCommandsPopup.contains(e.target) && e.target !== chatInput) {
+      hideSlashCommandsPopup();
+    }
+  });
 
   // Search Conversations (Feature 5)
   if (chatSearchInput) {
@@ -338,13 +541,17 @@ function bindEventListeners() {
     voiceInputBtn.addEventListener('click', toggleVoiceInput);
   }
 
-  // Generate Image Button in Input Bar
+  // Generate Image Button in Input Bar (Shortcut)
   if (generateImageBtn) {
     generateImageBtn.addEventListener('click', () => {
       const text = chatInput.value.trim();
-      const prompt = text || window.prompt('Describe the image you want Chabita to generate:', 'A dreamy sunset over mountains');
-      if (prompt) {
-        handleGenerateImageAction(prompt);
+      if (text) {
+        const prompt = text.replace(/^\/(?:image|img)\s*/i, '').trim();
+        handleGenerateImageAction(prompt || text, `/image ${prompt || text}`);
+      } else {
+        chatInput.value = '/image ';
+        chatInput.focus();
+        autoResizeTextarea();
       }
     });
   }
@@ -1308,7 +1515,7 @@ function appendMessageToDOM(role, content, image = null, documentData = null, in
 }
 
 // --- Image Generation Handler ---
-async function handleGenerateImageAction(promptText) {
+async function handleGenerateImageAction(promptText, customUserLabel = null) {
   let chat = getChat(currentChatId);
   if (!chat) {
     createNewChat();
@@ -1316,8 +1523,15 @@ async function handleGenerateImageAction(promptText) {
   }
   if (!chat || isStreaming) return;
 
-  chat.messages.push({ role: 'user', content: `Generate an image: "${promptText}"` });
+  const displayUserMessage = customUserLabel || `Generate an image: "${promptText}"`;
+  chat.messages.push({ role: 'user', content: displayUserMessage });
+  if (chat.messages.length === 1) {
+    chat.title = `Image: ${promptText.slice(0, 24)}`;
+  }
+
+  if (welcomeHero) welcomeHero.style.display = 'none';
   chatInput.value = '';
+  clearAttachedMedia();
   autoResizeTextarea();
   renderCurrentChat();
 
@@ -1378,6 +1592,57 @@ async function handleSendMessage() {
 
   if ((!text && !photoToSend && !docToSend) || isStreaming) return;
 
+  hideSlashCommandsPopup();
+
+  // Check for slash command shortcuts (Feature: Quick Shortcuts e.g. /image cat, /clear, /export, /share, /help)
+  if (!photoToSend && !docToSend && text.startsWith('/')) {
+    const parts = text.split(/\s+/);
+    const command = parts[0].toLowerCase();
+    const commandArg = text.substring(parts[0].length).trim();
+
+    if (command === '/image' || command === '/img') {
+      if (!commandArg) {
+        chatInput.value = '/image ';
+        chatInput.focus();
+        showSlashCommandsHelpNotice('Please specify a description for the image. Example: `/image cat` or `/image cozy cabin in snowy forest`');
+        return;
+      }
+      chatInput.value = '';
+      clearAttachedMedia();
+      autoResizeTextarea();
+      handleGenerateImageAction(commandArg, text);
+      return;
+    }
+
+    if (command === '/clear' || command === '/new') {
+      chatInput.value = '';
+      clearAttachedMedia();
+      createNewChat();
+      return;
+    }
+
+    if (command === '/export') {
+      chatInput.value = '';
+      clearAttachedMedia();
+      exportConversation();
+      return;
+    }
+
+    if (command === '/share') {
+      chatInput.value = '';
+      clearAttachedMedia();
+      handleShareChat();
+      return;
+    }
+
+    if (command === '/help') {
+      chatInput.value = '';
+      clearAttachedMedia();
+      showSlashCommandsHelp();
+      return;
+    }
+  }
+
   // Guarantee valid active conversation
   let chat = getChat(currentChatId);
   if (!chat) {
@@ -1386,7 +1651,7 @@ async function handleSendMessage() {
   }
   if (!chat) return;
 
-  // Check for image generation prompt
+  // Check for natural language image generation prompt
   const lower = text.toLowerCase();
   if (!photoToSend && !docToSend && (lower.startsWith('generate image') || lower.startsWith('draw a') || lower.startsWith('create an image of'))) {
     const prompt = text.replace(/^(generate image of|generate image|draw a|draw|create an image of)/i, '').trim();

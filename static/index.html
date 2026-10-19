@@ -303,9 +303,18 @@
         </div>
 
         <div class="input-box-wrapper">
+          <!-- Slash Commands Autocomplete Popup -->
+          <div class="slash-commands-popup" id="slashCommandsPopup" style="display: none;">
+            <div class="slash-commands-header">
+              <span>Quick Shortcuts</span>
+              <kbd>Esc to dismiss</kbd>
+            </div>
+            <div class="slash-commands-list" id="slashCommandsList"></div>
+          </div>
+
           <textarea 
             id="chatInput" 
-            placeholder="Ask anything, attach a PDF / photo, or describe an image to generate..." 
+            placeholder="Ask anything, type /image <prompt> or / for shortcuts..." 
             rows="1"
           ></textarea>
           
