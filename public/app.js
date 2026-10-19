@@ -324,27 +324,63 @@ function setupPhotoAttachmentListeners() {
   });
 }
 
-function handleImageFile(file) {
+function compressImage(file, maxWidth = 1024, maxHeight = 1024, quality = 0.82) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxWidth || height > maxHeight) {
+          if (width / height > maxWidth / maxHeight) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          } else {
+            width = Math.round((width * maxHeight) / height);
+            height = maxHeight;
+          }
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+async function handleImageFile(file) {
   if (!file.type.startsWith('image/')) {
     alert('Please select a valid image file (PNG, JPG, WEBP, GIF).');
     return;
   }
 
-  // Limit file size to 10MB
-  if (file.size > 10 * 1024 * 1024) {
-    alert('Image file is too large. Please select an image under 10MB.');
-    return;
-  }
-
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    currentAttachedImage = e.target.result;
+  // Auto-compress to optimal web size (< 300KB) for instant streaming and Firestore storage
+  try {
+    currentAttachedImage = await compressImage(file);
     imagePreviewImg.src = currentAttachedImage;
     imagePreviewName.textContent = file.name || 'photo.jpg';
     imagePreviewBadge.style.display = 'flex';
     chatInput.focus();
-  };
-  reader.readAsDataURL(file);
+  } catch (err) {
+    console.warn('Compression error, fallback to raw data URL:', err);
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      currentAttachedImage = e.target.result;
+      imagePreviewImg.src = currentAttachedImage;
+      imagePreviewName.textContent = file.name || 'photo.jpg';
+      imagePreviewBadge.style.display = 'flex';
+      chatInput.focus();
+    };
+    reader.readAsDataURL(file);
+  }
 }
 
 function clearAttachedImage() {
