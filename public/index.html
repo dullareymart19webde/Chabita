@@ -35,7 +35,12 @@
             <span class="brand-tag">Friendly AI</span>
           </div>
         </div>
-        <button class="icon-btn mobile-close-btn" id="closeSidebarBtn" title="Close sidebar">✕</button>
+        <button class="icon-btn mobile-close-btn" id="closeSidebarBtn" title="Close sidebar">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
       </div>
 
       <button class="new-chat-btn" id="newChatBtn">
@@ -59,7 +64,12 @@
         <!-- Pinned Chats Section (Feature 5) -->
         <div id="pinnedChatsSection" style="display: none;">
           <div class="history-section-header">
-            <span class="section-title">📌 Pinned</span>
+            <span class="section-title">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:4px;">
+                <line x1="12" y1="17" x2="12" y2="22"></line>
+                <path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.89A2 2 0 0 1 15 10.77V6a3 3 0 0 0-6 0v4.77a2 2 0 0 1-1.11 1.79l-1.78.89A2 2 0 0 0 5 15.24Z"></path>
+              </svg>Pinned
+            </span>
           </div>
           <div class="chat-history-list" id="pinnedHistoryList"></div>
         </div>
@@ -75,7 +85,12 @@
 
       <!-- User Profile / Auth Card -->
       <div class="user-profile-card" id="userProfileCard">
-        <div class="user-profile-avatar" id="userProfileAvatar">🚀</div>
+        <div class="user-profile-avatar" id="userProfileAvatar">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+            <circle cx="12" cy="7" r="4"></circle>
+          </svg>
+        </div>
         <div class="user-profile-info">
           <span class="user-profile-name" id="userProfileName">Guest User</span>
           <span class="user-profile-status" id="userProfileStatus">Local Storage</span>
@@ -96,7 +111,11 @@
             </svg>
           </button>
           <button class="icon-btn" id="themeToggleBtn" title="Toggle Light/Dark Theme">
-            <span id="themeIcon">🌙</span>
+            <span id="themeIcon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+              </svg>
+            </span>
           </button>
         </div>
       </div>
@@ -106,8 +125,21 @@
     <main class="main-content">
       <!-- Shared Chat Banner (Feature 3) -->
       <div class="shared-chat-banner" id="sharedChatBanner" style="display: none;">
-        <span>👀 You are viewing a shared conversation with Chabita</span>
-        <button class="shared-banner-action-btn" id="startOwnChatFromBannerBtn">Start Your Own Chat 🌸</button>
+        <span>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:6px;">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="16" x2="12" y2="12"></line>
+            <line x1="12" y1="8" x2="12.01" y2="8"></line>
+          </svg>
+          You are viewing a shared conversation with Chabita
+        </span>
+        <button class="shared-banner-action-btn" id="startOwnChatFromBannerBtn">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:4px;">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+          Start Your Own Chat
+        </button>
       </div>
 
       <!-- Top Navbar -->
@@ -160,7 +192,12 @@
 
           <!-- Top Nav User Action -->
           <button class="action-pill-btn" id="navAuthBtn" title="Sign In or View Account">
-            <span id="navAuthIcon">👤</span>
+            <span id="navAuthIcon">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:2px;">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                <circle cx="12" cy="7" r="4"></circle>
+              </svg>
+            </span>
             <span id="navAuthText">Sign In</span>
           </button>
         </div>
@@ -173,12 +210,19 @@
           <div class="hero-avatar-wrap">
             <img src="favicon.svg" alt="Chabita Avatar" class="hero-avatar">
           </div>
-          <h1 class="hero-title">Hi! I'm Chabita 👋</h1>
-          <p class="hero-subtitle">Your friendly AI assistant with multimodal vision, PDF document analysis, and photo generation. What are we working on today?</p>
+          <h1 class="hero-title">Hi, I'm Chabita</h1>
+          <p class="hero-subtitle">Your intelligent assistant with multimodal vision, document analysis, and artwork generation. What are we exploring today?</p>
           
           <div class="suggestion-cards-grid">
             <div class="suggestion-card" data-prompt="Please summarize this PDF document and highlight the 3 most important takeaways." data-action="doc">
-              <div class="card-icon">📄</div>
+              <div class="card-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                  <polyline points="14 2 14 8 20 8"></polyline>
+                  <line x1="16" y1="13" x2="8" y2="13"></line>
+                  <line x1="16" y1="17" x2="8" y2="17"></line>
+                </svg>
+              </div>
               <div class="card-text">
                 <strong>Analyze a PDF or Document</strong>
                 <p>Upload a PDF, notes, or paper to summarize</p>
@@ -186,15 +230,25 @@
             </div>
 
             <div class="suggestion-card" data-prompt="Analyze this photo in detail and describe what you see." data-action="attach">
-              <div class="card-icon">📷</div>
+              <div class="card-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                  <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                  <polyline points="21 15 16 10 5 21"></polyline>
+                </svg>
+              </div>
               <div class="card-text">
                 <strong>Analyze a photo</strong>
-                <p>Upload any picture for instant AI breakdown</p>
+                <p>Upload any picture for instant visual breakdown</p>
               </div>
             </div>
 
             <div class="suggestion-card" data-prompt="Generate an image of a cozy cottage in a blooming cherry blossom forest at sunset." data-action="generate">
-              <div class="card-icon">🎨</div>
+              <div class="card-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"></path>
+                </svg>
+              </div>
               <div class="card-text">
                 <strong>Generate an image</strong>
                 <p>Create beautiful AI artwork from your idea</p>
@@ -202,7 +256,13 @@
             </div>
 
             <div class="suggestion-card" data-prompt="Can you explain quantum computing in simple, plain English without jargon?">
-              <div class="card-icon">✨</div>
+              <div class="card-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+                  <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                </svg>
+              </div>
               <div class="card-text">
                 <strong>Explain simply</strong>
                 <p>Quantum computing in plain words</p>
@@ -221,13 +281,25 @@
         <div class="image-preview-badge" id="imagePreviewBadge" style="display: none;">
           <div class="preview-thumb-wrap" id="previewThumbWrap">
             <img id="imagePreviewImg" src="" alt="Selected attachment">
-            <span id="docPreviewIcon" style="display: none;">📄</span>
+            <span id="docPreviewIcon" style="display: none;">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+                <line x1="16" y1="13" x2="8" y2="13"></line>
+                <line x1="16" y1="17" x2="8" y2="17"></line>
+              </svg>
+            </span>
           </div>
           <div class="image-preview-info">
             <span id="imagePreviewName">file.ext</span>
             <span class="image-preview-sub" id="imagePreviewSub">Ready to analyze with Gemini</span>
           </div>
-          <button class="remove-preview-btn" id="removeImageBtn" title="Remove attached file">✕</button>
+          <button class="remove-preview-btn" id="removeImageBtn" title="Remove attached file">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
         </div>
 
         <div class="input-box-wrapper">
@@ -294,7 +366,12 @@
   <!-- Authentication Modal (Google & Email Account) -->
   <div class="modal-backdrop" id="authModal" style="display: none;">
     <div class="modal-card">
-      <button class="modal-close-btn" id="closeAuthModalBtn" title="Close modal">✕</button>
+      <button class="modal-close-btn" id="closeAuthModalBtn" title="Close modal">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
       <div class="modal-header">
         <img src="favicon.svg" alt="Chabita" class="modal-avatar">
         <h2 id="authModalTitle">Welcome to Chabita</h2>
@@ -329,7 +406,12 @@
         <div class="form-group">
           <label for="authEmail">Email or Username</label>
           <div class="input-with-icon">
-            <span class="field-icon">✉️</span>
+            <span class="field-icon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                <polyline points="22,6 12,13 2,6"></polyline>
+              </svg>
+            </span>
             <input type="text" id="authEmail" placeholder="your@email.com" autocomplete="email" required>
           </div>
         </div>
@@ -337,7 +419,12 @@
         <div class="form-group">
           <label for="authPassword">Password</label>
           <div class="input-with-icon">
-            <span class="field-icon">🔒</span>
+            <span class="field-icon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+              </svg>
+            </span>
             <input type="password" id="authPassword" placeholder="Minimum 6 characters" autocomplete="current-password" required>
           </div>
         </div>
@@ -345,7 +432,12 @@
         <div class="form-group" id="confirmPasswordGroup" style="display: none;">
           <label for="authConfirmPassword">Confirm Password</label>
           <div class="input-with-icon">
-            <span class="field-icon">🔒</span>
+            <span class="field-icon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+              </svg>
+            </span>
             <input type="password" id="authConfirmPassword" placeholder="Re-enter your password" autocomplete="new-password">
           </div>
         </div>
@@ -357,7 +449,12 @@
         </div>
 
         <button type="button" class="guest-mode-btn" id="guestModeBtn">
-          🚀 Continue as Guest (Instant Access)
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:6px;">
+            <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path>
+            <polyline points="10 17 15 12 10 7"></polyline>
+            <line x1="15" y1="12" x2="3" y2="12"></line>
+          </svg>
+          Continue as Guest
         </button>
       </form>
     </div>
@@ -366,9 +463,19 @@
   <!-- Share Conversation Modal (Feature 3) -->
   <div class="modal-backdrop" id="shareModal" style="display: none;">
     <div class="modal-card">
-      <button class="modal-close-btn" id="closeShareModalBtn" title="Close modal">✕</button>
+      <button class="modal-close-btn" id="closeShareModalBtn" title="Close modal">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
       <div class="modal-header">
-        <div class="share-icon-wrap">🔗</div>
+        <div class="share-icon-wrap">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+          </svg>
+        </div>
         <h2>Share Conversation</h2>
         <p>Anyone with this link will be able to read this conversation</p>
       </div>
@@ -382,18 +489,34 @@
       </div>
 
       <div class="share-security-notice">
-        🔒 <strong>Read-Only Link:</strong> Viewers cannot edit your chat or view any of your other private conversations.
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px;">
+          <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+          <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+        </svg>
+        <strong>Read-Only Link:</strong> Viewers cannot edit your chat or view any of your other private conversations.
       </div>
     </div>
   </div>
 
   <!-- Image Lightbox Modal -->
   <div class="lightbox-modal" id="lightboxModal" style="display: none;">
-    <button class="lightbox-close-btn" id="lightboxCloseBtn" title="Close view">✕</button>
+    <button class="lightbox-close-btn" id="lightboxCloseBtn" title="Close view">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="18" y1="6" x2="6" y2="18"></line>
+        <line x1="6" y1="6" x2="18" y2="18"></line>
+      </svg>
+    </button>
     <div class="lightbox-content">
       <img id="lightboxImage" src="" alt="Fullscreen image">
       <div class="lightbox-toolbar">
-        <a id="lightboxDownloadBtn" href="" download="chabita-image.jpg" class="lightbox-btn" target="_blank">⬇️ Download Image</a>
+        <a id="lightboxDownloadBtn" href="" download="chabita-image.jpg" class="lightbox-btn" target="_blank">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:6px;">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+          Download Image
+        </a>
       </div>
     </div>
   </div>

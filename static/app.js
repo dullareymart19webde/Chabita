@@ -35,6 +35,20 @@ let currentUser = null;
 let currentUserId = null;
 let authModalMode = 'login'; // 'login' or 'register'
 
+// --- SVG Icons (Professional Vector UI) ---
+const SUN_ICON_SVG = `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>`;
+const MOON_ICON_SVG = `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>`;
+const CLOUD_ICON_SVG = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"></path></svg>`;
+const PIN_FILLED_ICON_SVG = `<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="16 2 8 2 8 8 5 11 5 13 11 13 11 22 13 22 13 13 19 13 19 11 16 8 16 2"></polygon></svg>`;
+const PIN_OUTLINE_ICON_SVG = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="16 2 8 2 8 8 5 11 5 13 11 13 11 22 13 22 13 13 19 13 19 11 16 8 16 2"></polygon></svg>`;
+const RENAME_ICON_SVG = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>`;
+const CLOSE_ICON_SVG = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`;
+const DOC_ICON_SVG = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>`;
+const USER_AVATAR_SVG = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>`;
+const DOWNLOAD_ICON_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>`;
+const ZOOM_ICON_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line><line x1="11" y1="8" x2="11" y2="14"></line><line x1="8" y1="11" x2="14" y2="11"></line></svg>`;
+const SEARCH_ICON_SVG = `<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>`;
+
 // --- DOM Elements ---
 const chatContainer = document.getElementById('chatContainer');
 const messagesList = document.getElementById('messagesList');
@@ -542,8 +556,8 @@ function handleUniversalFile(file) {
 
     if (imagePreviewImg) imagePreviewImg.style.display = 'none';
     if (docPreviewIcon) {
-      docPreviewIcon.style.display = 'block';
-      docPreviewIcon.textContent = isPdf ? '📕' : '📄';
+      docPreviewIcon.style.display = 'inline-flex';
+      docPreviewIcon.innerHTML = DOC_ICON_SVG;
     }
     if (imagePreviewName) imagePreviewName.textContent = file.name;
     if (imagePreviewSub) imagePreviewSub.textContent = `Document (${formatFileSize(file.size)}) attached • Press Enter or Send to analyze`;
@@ -628,7 +642,7 @@ async function initFirebase() {
       } catch (e) {}
 
       if (storageSourceBadge) {
-        storageSourceBadge.textContent = '☁️ Cloud';
+        storageSourceBadge.innerHTML = `${CLOUD_ICON_SVG}<span>Cloud</span>`;
         storageSourceBadge.classList.add('synced');
         storageSourceBadge.title = 'Saved securely in cloud';
       }
@@ -947,7 +961,7 @@ function createHistoryItemElement(chat) {
   // Pin Toggle Button (Feature 5)
   const pinBtn = document.createElement('button');
   pinBtn.className = `history-action-icon-btn ${chat.pinned ? 'pinned' : ''}`;
-  pinBtn.innerHTML = chat.pinned ? '📌' : '📍';
+  pinBtn.innerHTML = chat.pinned ? PIN_FILLED_ICON_SVG : PIN_OUTLINE_ICON_SVG;
   pinBtn.title = chat.pinned ? 'Unpin conversation' : 'Pin conversation to top';
   pinBtn.addEventListener('click', async (e) => {
     e.stopPropagation();
@@ -959,7 +973,7 @@ function createHistoryItemElement(chat) {
   // Rename Button (Feature 5)
   const renameBtn = document.createElement('button');
   renameBtn.className = 'history-action-icon-btn';
-  renameBtn.innerHTML = '✏️';
+  renameBtn.innerHTML = RENAME_ICON_SVG;
   renameBtn.title = 'Rename conversation';
   renameBtn.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -970,7 +984,7 @@ function createHistoryItemElement(chat) {
   // Delete Button
   const deleteBtn = document.createElement('button');
   deleteBtn.className = 'history-action-icon-btn';
-  deleteBtn.innerHTML = '✕';
+  deleteBtn.innerHTML = CLOSE_ICON_SVG;
   deleteBtn.title = 'Delete conversation';
   deleteBtn.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -1117,11 +1131,11 @@ function updateAuthUI(username, photoURL = null) {
       userProfileAvatar.textContent = username.charAt(0).toUpperCase();
     }
     if (userProfileName) userProfileName.textContent = username;
-    if (userProfileStatus) userProfileStatus.textContent = isFirebaseEnabled ? '☁️ Cloud Synced' : 'Signed In';
+    if (userProfileStatus) userProfileStatus.textContent = isFirebaseEnabled ? 'Cloud Synced' : 'Signed In';
     if (authActionBtn) authActionBtn.textContent = 'Sign Out';
     if (navAuthText) navAuthText.textContent = `Sign Out (${username})`;
   } else {
-    if (userProfileAvatar) userProfileAvatar.textContent = '🚀';
+    if (userProfileAvatar) userProfileAvatar.innerHTML = USER_AVATAR_SVG;
     if (userProfileName) userProfileName.textContent = 'Guest User';
     if (userProfileStatus) userProfileStatus.textContent = 'Guest Mode';
     if (authActionBtn) authActionBtn.textContent = 'Sign In';
@@ -1150,7 +1164,7 @@ function switchAuthTab(mode) {
   if (mode === 'login') {
     if (tabSignIn) tabSignIn.classList.add('active');
     if (tabSignUp) tabSignUp.classList.remove('active');
-    if (authModalTitle) authModalTitle.textContent = 'Welcome Back! 👋';
+    if (authModalTitle) authModalTitle.textContent = 'Welcome Back!';
     if (authModalSubtitle) authModalSubtitle.textContent = 'Sign in with Google or your email to sync your chats';
     if (confirmPasswordGroup) confirmPasswordGroup.style.display = 'none';
     if (authConfirmPassword) authConfirmPassword.removeAttribute('required');
@@ -1158,7 +1172,7 @@ function switchAuthTab(mode) {
   } else {
     if (tabSignUp) tabSignUp.classList.add('active');
     if (tabSignIn) tabSignIn.classList.remove('active');
-    if (authModalTitle) authModalTitle.textContent = 'Create an Account 🌸';
+    if (authModalTitle) authModalTitle.textContent = 'Create an Account';
     if (authModalSubtitle) authModalSubtitle.textContent = 'Join Chabita for a personalized AI experience';
     if (confirmPasswordGroup) confirmPasswordGroup.style.display = 'block';
     if (authConfirmPassword) authConfirmPassword.setAttribute('required', 'true');
@@ -1220,10 +1234,8 @@ function appendMessageToDOM(role, content, image = null, documentData = null, in
   if (documentData) {
     const docCard = document.createElement('div');
     docCard.className = 'chat-attached-doc-card';
-    const isPdf = (documentData.mimeType && documentData.mimeType.includes('pdf')) || (documentData.name && documentData.name.toLowerCase().endsWith('.pdf'));
-    const docIcon = isPdf ? '📕' : '📄';
     docCard.innerHTML = `
-      <div class="doc-card-icon">${docIcon}</div>
+      <div class="doc-card-icon">${DOC_ICON_SVG}</div>
       <div class="doc-card-details">
         <span class="doc-card-name" title="${escapeHtml(documentData.name || 'document')}">${escapeHtml(documentData.name || 'document')}</span>
         <span class="doc-card-meta">${escapeHtml(documentData.mimeType || 'Document')} ${documentData.size ? '• ' + escapeHtml(documentData.size) : ''}</span>
@@ -1240,8 +1252,8 @@ function appendMessageToDOM(role, content, image = null, documentData = null, in
       <img src="${image}" class="${role === 'user' ? 'chat-attached-image' : 'generated-image'}" onclick="openImageLightbox(this.src)" alt="Photo in chat">
       ${role === 'assistant' ? `
         <div class="image-card-footer">
-          <a href="${image}" target="_blank" download="chabita-generated.jpg" class="image-action-btn">⬇️ Download</a>
-          <button onclick="openImageLightbox('${image}')" class="image-action-btn">🔍 Zoom</button>
+          <a href="${image}" target="_blank" download="chabita-generated.jpg" class="image-action-btn">${DOWNLOAD_ICON_SVG}<span>Download</span></a>
+          <button onclick="openImageLightbox('${image}')" class="image-action-btn">${ZOOM_ICON_SVG}<span>Zoom</span></button>
         </div>` : ''}
     `;
     bubble.appendChild(imgWrapper);
@@ -1304,7 +1316,7 @@ async function handleGenerateImageAction(promptText) {
   }
   if (!chat || isStreaming) return;
 
-  chat.messages.push({ role: 'user', content: `🎨 Generate an image: "${promptText}"` });
+  chat.messages.push({ role: 'user', content: `Generate an image: "${promptText}"` });
   chatInput.value = '';
   autoResizeTextarea();
   renderCurrentChat();
@@ -1312,7 +1324,7 @@ async function handleGenerateImageAction(promptText) {
   isStreaming = true;
   if (sendBtn) sendBtn.disabled = true;
 
-  const { bubble, textDiv } = appendMessageToDOM('assistant', 'Generating your image, give me just a moment... 🎨');
+  const { bubble, textDiv } = appendMessageToDOM('assistant', 'Generating your image, give me just a moment...');
   scrollToBottom();
 
   try {
@@ -1327,7 +1339,7 @@ async function handleGenerateImageAction(promptText) {
       throw new Error(data.detail || 'Could not generate image');
     }
 
-    const successText = `Here is your generated image for: **"${promptText}"** 🌸`;
+    const successText = `Here is your generated image for: **"${promptText}"**`;
     textDiv.innerHTML = marked.parse(successText);
 
     const card = document.createElement('div');
@@ -1335,8 +1347,8 @@ async function handleGenerateImageAction(promptText) {
     card.innerHTML = `
       <img src="${data.image_url}" class="generated-image" onclick="openImageLightbox(this.src)" alt="${promptText}">
       <div class="image-card-footer">
-        <a href="${data.image_url}" target="_blank" download="chabita-generated.jpg" class="image-action-btn">⬇️ Download Image</a>
-        <button onclick="openImageLightbox('${data.image_url}')" class="image-action-btn">🔍 View Fullscreen</button>
+        <a href="${data.image_url}" target="_blank" download="chabita-generated.jpg" class="image-action-btn">${DOWNLOAD_ICON_SVG}<span>Download Image</span></a>
+        <button onclick="openImageLightbox('${data.image_url}')" class="image-action-btn">${ZOOM_ICON_SVG}<span>View Fullscreen</span></button>
       </div>
     `;
     bubble.insertBefore(card, textDiv);
@@ -1413,7 +1425,7 @@ async function handleSendMessage() {
     if (text) {
       chat.title = text.slice(0, 30) + (text.length > 30 ? '...' : '');
     } else if (docToSend) {
-      chat.title = `📄 ${docToSend.name.slice(0, 24)}`;
+      chat.title = docToSend.name.slice(0, 28);
     } else {
       chat.title = 'Photo Analysis';
     }
@@ -1504,7 +1516,7 @@ async function handleSendMessage() {
           try {
             const parsed = JSON.parse(dataStr);
             if (parsed.error) {
-              accumulatedText += `\n\n> ⚠️ *${parsed.error}*`;
+              accumulatedText += `\n\n> **Notice:** *${parsed.error}*`;
             } else if (parsed.text) {
               accumulatedText += parsed.text;
             }
@@ -1518,7 +1530,7 @@ async function handleSendMessage() {
 
     // Finalize message
     typingCursor.remove();
-    textDiv.innerHTML = marked.parse(accumulatedText || 'I am ready for your next request! 🌸');
+    textDiv.innerHTML = marked.parse(accumulatedText || 'I am ready for your next request.');
     chat.messages.push({ role: 'assistant', content: accumulatedText });
     await saveChatToStorage(chat);
     renderCurrentChat();
@@ -1541,7 +1553,7 @@ async function handleSendMessage() {
 async function handleShareChat() {
   const chat = getChat(currentChatId);
   if (!chat || chat.messages.length === 0) {
-    alert('Please start a conversation with at least one message before sharing! 🌸');
+    alert('Please start a conversation with at least one message before sharing.');
     return;
   }
 
@@ -1587,14 +1599,14 @@ function copyShareLink() {
   if (!shareLinkInput.value || shareLinkInput.value.includes('Creating')) return;
   navigator.clipboard.writeText(shareLinkInput.value).then(() => {
     const origText = copyShareLinkBtn.textContent;
-    copyShareLinkBtn.textContent = 'Copied! ✨';
+    copyShareLinkBtn.textContent = 'Copied!';
     setTimeout(() => {
       copyShareLinkBtn.textContent = origText;
     }, 2000);
   }).catch(() => {
     shareLinkInput.select();
     document.execCommand('copy');
-    copyShareLinkBtn.textContent = 'Copied! ✨';
+    copyShareLinkBtn.textContent = 'Copied!';
     setTimeout(() => {
       copyShareLinkBtn.textContent = 'Copy Link';
     }, 2000);
@@ -1611,7 +1623,7 @@ async function checkAndLoadSharedChat() {
 
   // Viewer read-only state
   if (welcomeHero) welcomeHero.style.display = 'none';
-  messagesList.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted);">Loading shared conversation... ✨</div>';
+  messagesList.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted);">Loading shared conversation...</div>';
 
   try {
     let sharedChat = null;
@@ -1625,10 +1637,10 @@ async function checkAndLoadSharedChat() {
     if (!sharedChat) {
       messagesList.innerHTML = `
         <div style="text-align:center;padding:50px 20px;">
-          <div style="font-size:2.5rem;margin-bottom:12px;">🔍</div>
+          <div style="display:flex;justify-content:center;margin-bottom:16px;color:var(--text-muted);">${SEARCH_ICON_SVG}</div>
           <h3>Shared Conversation Not Found</h3>
           <p style="color:var(--text-muted);margin:8px 0 20px;">This share link may have expired or does not exist.</p>
-          <a href="/" class="shared-banner-action-btn" style="text-decoration:none;display:inline-block;">Start Your Own Chat 🌸</a>
+          <a href="/" class="shared-banner-action-btn" style="text-decoration:none;display:inline-block;">Start Your Own Chat</a>
         </div>
       `;
       return true;
@@ -1765,10 +1777,10 @@ function exportConversation() {
   md += `*Exported on ${new Date().toLocaleString()}*\n\n---\n\n`;
 
   chat.messages.forEach(m => {
-    const roleName = m.role === 'user' ? '👤 **You**' : '🌸 **Chabita**';
+    const roleName = m.role === 'user' ? '**You**' : '**Chabita**';
     md += `### ${roleName}\n\n`;
     if (m.document) {
-      md += `📎 **Attached Document:** ${m.document.name} (${m.document.mimeType || 'Document'})\n\n`;
+      md += `**Attached Document:** ${m.document.name} (${m.document.mimeType || 'Document'})\n\n`;
     }
     if (m.image) {
       md += `![Attached Image](${m.image})\n\n`;
@@ -1794,15 +1806,15 @@ function loadTheme() {
   const savedTheme = localStorage.getItem('chabita_theme') || 'light';
   if (savedTheme === 'dark') {
     document.body.classList.add('dark-mode');
-    if (themeIcon) themeIcon.textContent = '☀️';
+    if (themeIcon) themeIcon.innerHTML = SUN_ICON_SVG;
   } else {
     document.body.classList.remove('dark-mode');
-    if (themeIcon) themeIcon.textContent = '🌙';
+    if (themeIcon) themeIcon.innerHTML = MOON_ICON_SVG;
   }
 }
 
 function toggleTheme() {
   const isDark = document.body.classList.toggle('dark-mode');
   localStorage.setItem('chabita_theme', isDark ? 'dark' : 'light');
-  if (themeIcon) themeIcon.textContent = isDark ? '☀️' : '🌙';
+  if (themeIcon) themeIcon.innerHTML = isDark ? SUN_ICON_SVG : MOON_ICON_SVG;
 }
