@@ -1,9 +1,15 @@
 /**
  * Chabita AI Assistant - Frontend Application
- * Multimodal Vision, Image Generation, Firebase Auth & Firestore Database
+ * Full-featured Web AI Assistant:
+ * - Feature 1: PDF & Document Analyzer (Gemini multimodal reading of PDFs, TXT, CSV, MD)
+ * - Feature 3: Shareable Chat Links (Firestore shared_chats read-only public links)
+ * - Feature 5: Pin & Rename Chats + Sidebar Search
+ * - Multimodal Vision (Photo analysis & display)
+ * - AI Image Generation (with Pollinations fallback)
+ * - Firebase Auth (Google & Email/Password & Guest Mode) + Cloud Firestore Database
  */
 
-// Application State
+// --- Application State ---
 let conversations = [];
 let currentChatId = null;
 let isStreaming = false;
@@ -11,8 +17,14 @@ let currentMode = 'warm_simple';
 let recognition = null;
 let isRecording = false;
 
-// Multimodal Image Attachment State
-let currentAttachedImage = null; // base64 Data URL
+// Multimodal Attachment State
+let currentAttachedImage = null; // Base64 Data URL (image)
+let currentAttachedDoc = null;   // { name, mimeType, data, size } (document/pdf)
+
+// Sidebar Filter & Rename State
+let chatSearchTerm = '';
+let editingChatId = null;
+let isSharedView = false;
 
 // Firebase & Auth State
 let firebaseApp = null;
@@ -23,7 +35,7 @@ let currentUser = null;
 let currentUserId = null;
 let authModalMode = 'login'; // 'login' or 'register'
 
-// DOM Elements
+// --- DOM Elements ---
 const chatContainer = document.getElementById('chatContainer');
 const messagesList = document.getElementById('messagesList');
 const welcomeHero = document.getElementById('welcomeHero');
@@ -44,14 +56,33 @@ const closeSidebarBtn = document.getElementById('closeSidebarBtn');
 const storageSourceBadge = document.getElementById('storageSourceBadge');
 const systemStatusLabel = document.getElementById('systemStatusLabel');
 
-// Multimodal Photo DOM Elements
+// Search & Pin DOM Elements (Feature 5)
+const chatSearchInput = document.getElementById('chatSearchInput');
+const pinnedChatsSection = document.getElementById('pinnedChatsSection');
+const pinnedHistoryList = document.getElementById('pinnedHistoryList');
+
+// Universal Attachment DOM Elements (Feature 1)
+const attachFileBtn = document.getElementById('attachFileBtn');
+const universalFileInput = document.getElementById('universalFileInput');
 const attachImageBtn = document.getElementById('attachImageBtn');
 const imageFileInput = document.getElementById('imageFileInput');
 const generateImageBtn = document.getElementById('generateImageBtn');
 const imagePreviewBadge = document.getElementById('imagePreviewBadge');
+const previewThumbWrap = document.getElementById('previewThumbWrap');
 const imagePreviewImg = document.getElementById('imagePreviewImg');
+const docPreviewIcon = document.getElementById('docPreviewIcon');
 const imagePreviewName = document.getElementById('imagePreviewName');
+const imagePreviewSub = document.getElementById('imagePreviewSub');
 const removeImageBtn = document.getElementById('removeImageBtn');
+
+// Share Modal DOM Elements (Feature 3)
+const shareChatBtn = document.getElementById('shareChatBtn');
+const shareModal = document.getElementById('shareModal');
+const closeShareModalBtn = document.getElementById('closeShareModalBtn');
+const shareLinkInput = document.getElementById('shareLinkInput');
+const copyShareLinkBtn = document.getElementById('copyShareLinkBtn');
+const sharedChatBanner = document.getElementById('sharedChatBanner');
+const startOwnChatFromBannerBtn = document.getElementById('startOwnChatFromBannerBtn');
 
 // Lightbox DOM Elements
 const lightboxModal = document.getElementById('lightboxModal');
@@ -92,7 +123,17 @@ const firebaseStatusText = document.getElementById('firebaseStatusText');
 const firebaseConfigInput = document.getElementById('firebaseConfigInput');
 const saveFirebaseConfigBtn = document.getElementById('saveFirebaseConfigBtn');
 
-// Initialize Marked & Highlight.js
+// Default Firebase project configuration (chabita-ai-app)
+const DEFAULT_FIREBASE_CONFIG = {
+  apiKey: "AIzaSyCMRujz_3C36tE1P4Gpb53_gQ2zLUOQorc",
+  authDomain: "chabita-ai-app.firebaseapp.com",
+  projectId: "chabita-ai-app",
+  storageBucket: "chabita-ai-app.firebasestorage.app",
+  messagingSenderId: "1054117756725",
+  appId: "1:1054117756725:web:778bf73f4214d40e28567c"
+};
+
+// --- Marked & Highlight.js Setup ---
 if (typeof marked !== 'undefined') {
   marked.setOptions({
     breaks: true,
@@ -106,40 +147,62 @@ if (typeof marked !== 'undefined') {
       return typeof hljs !== 'undefined' ? hljs.highlightAuto(code).value : code;
     }
   });
+
+  const renderer = new marked.Renderer();
+  renderer.code = function(code, language) {
+    const lang = language || 'code';
+    const highlighted = (typeof hljs !== 'undefined' && lang && hljs.getLanguage(lang))
+      ? hljs.highlight(code, { language: lang }).value
+      : (typeof hljs !== 'undefined' ? hljs.highlightAuto(code).value : code);
+
+    return `
+      <div class="code-block-wrapper">
+        <div class="code-header">
+          <span>${lang}</span>
+          <button class="copy-code-btn" onclick="copyCodeSnippet(this)">Copy code</button>
+        </div>
+        <pre><code class="hljs language-${lang}">${highlighted}</code></pre>
+      </div>
+    `;
+  };
+  marked.use({ renderer });
 }
 
-// Custom renderer for code blocks with copy header
-const renderer = new marked.Renderer();
-renderer.code = function(code, language) {
-  const lang = language || 'code';
-  const highlighted = (typeof hljs !== 'undefined' && lang && hljs.getLanguage(lang))
-    ? hljs.highlight(code, { language: lang }).value
-    : (typeof hljs !== 'undefined' ? hljs.highlightAuto(code).value : code);
+// --- Helper Functions ---
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
 
-  return `
-    <div class="code-block-wrapper">
-      <div class="code-header">
-        <span>${lang}</span>
-        <button class="copy-code-btn" onclick="copyCodeSnippet(this)">Copy code</button>
-      </div>
-      <pre><code class="hljs language-${lang}">${highlighted}</code></pre>
-    </div>
-  `;
-};
-marked.use({ renderer });
+function formatFileSize(bytes) {
+  if (!bytes || bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+}
 
 // --- Application Entry Point ---
 document.addEventListener('DOMContentLoaded', async () => {
   loadTheme();
   setupSpeechRecognition();
-  setupPhotoAttachmentListeners();
+  setupAttachmentListeners();
   bindEventListeners();
   autoResizeTextarea();
 
-  // Initialize Firebase (Auth & Firestore)
+  // 1. Initialize Firebase (Auth & Firestore)
   await initFirebase();
 
-  // If first time visiting (not logged in and hasn't chosen guest mode), show choice modal
+  // 2. Check if loading a shared conversation via ?share=<shareId>
+  const isViewingShared = await checkAndLoadSharedChat();
+  if (isViewingShared) return;
+
+  // 3. If first-time user (not logged in & hasn't clicked guest mode), show sign-in modal
   const hasChosenGuest = localStorage.getItem('chabita_guest_mode');
   if (!currentUser && !hasChosenGuest) {
     setTimeout(() => {
@@ -150,49 +213,90 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 // --- Event Listeners ---
 function bindEventListeners() {
-  // Sending messages
-  sendBtn.addEventListener('click', handleSendMessage);
-  chatInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSendMessage();
-    }
-  });
+  // Send message
+  if (sendBtn) sendBtn.addEventListener('click', handleSendMessage);
+  if (chatInput) {
+    chatInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        handleSendMessage();
+      }
+    });
+    chatInput.addEventListener('input', autoResizeTextarea);
+  }
 
-  // Auto-resize textarea
-  chatInput.addEventListener('input', autoResizeTextarea);
+  // Search Conversations (Feature 5)
+  if (chatSearchInput) {
+    chatSearchInput.addEventListener('input', (e) => {
+      chatSearchTerm = e.target.value.toLowerCase().trim();
+      renderHistoryList();
+    });
+  }
 
-  // New Chat
-  newChatBtn.addEventListener('click', () => {
-    if (isStreaming) return;
-    createNewChat();
-  });
+  // New Chat Button
+  if (newChatBtn) {
+    newChatBtn.addEventListener('click', () => {
+      if (isStreaming) return;
+      if (isSharedView) {
+        window.location.href = window.location.origin + window.location.pathname;
+        return;
+      }
+      createNewChat();
+    });
+  }
 
-  // Mode Selection
-  personaModeSelect.addEventListener('change', (e) => {
-    currentMode = e.target.value;
-    const modeNames = {
-      warm_simple: 'Warm & Simple',
-      concise: 'Quick & Concise',
-      detailed: 'Step-by-Step Deep Dive'
-    };
-    currentModeLabel.textContent = modeNames[currentMode] || 'Warm & Simple';
-  });
+  // Persona Mode Selection
+  if (personaModeSelect) {
+    personaModeSelect.addEventListener('change', (e) => {
+      currentMode = e.target.value;
+      const modeNames = {
+        warm_simple: 'Warm & Simple',
+        concise: 'Quick & Concise',
+        detailed: 'Step-by-Step Deep Dive'
+      };
+      if (currentModeLabel) {
+        currentModeLabel.textContent = modeNames[currentMode] || 'Warm & Simple';
+      }
+    });
+  }
 
-  // Export
-  exportChatBtn.addEventListener('click', exportConversation);
+  // Share Chat Modal Triggers (Feature 3)
+  if (shareChatBtn) {
+    shareChatBtn.addEventListener('click', handleShareChat);
+  }
+  if (closeShareModalBtn) {
+    closeShareModalBtn.addEventListener('click', () => {
+      shareModal.style.display = 'none';
+    });
+  }
+  if (copyShareLinkBtn) {
+    copyShareLinkBtn.addEventListener('click', copyShareLink);
+  }
+  if (shareModal) {
+    shareModal.addEventListener('click', (e) => {
+      if (e.target === shareModal) shareModal.style.display = 'none';
+    });
+  }
+  if (startOwnChatFromBannerBtn) {
+    startOwnChatFromBannerBtn.addEventListener('click', () => {
+      window.location.href = window.location.origin + window.location.pathname;
+    });
+  }
 
-  // Theme toggle
-  themeToggleBtn.addEventListener('click', toggleTheme);
+  // Export Conversation
+  if (exportChatBtn) exportChatBtn.addEventListener('click', exportConversation);
 
-  // Clear history
-  clearAllChatsBtn.addEventListener('click', clearAllChats);
+  // Theme Toggle
+  if (themeToggleBtn) themeToggleBtn.addEventListener('click', toggleTheme);
 
-  // Mobile sidebar
-  if (toggleSidebarBtn) {
+  // Clear All History
+  if (clearAllChatsBtn) clearAllChatsBtn.addEventListener('click', clearAllChats);
+
+  // Mobile Sidebar
+  if (toggleSidebarBtn && sidebar) {
     toggleSidebarBtn.addEventListener('click', () => sidebar.classList.toggle('open'));
   }
-  if (closeSidebarBtn) {
+  if (closeSidebarBtn && sidebar) {
     closeSidebarBtn.addEventListener('click', () => sidebar.classList.remove('open'));
   }
 
@@ -202,7 +306,7 @@ function bindEventListeners() {
       const prompt = card.getAttribute('data-prompt');
       const action = card.getAttribute('data-action');
       if (action === 'attach') {
-        imageFileInput.click();
+        if (universalFileInput) universalFileInput.click();
         chatInput.value = prompt;
         autoResizeTextarea();
       } else if (action === 'generate') {
@@ -234,80 +338,103 @@ function bindEventListeners() {
   }
 
   // Auth Modal Triggers
-  authActionBtn.addEventListener('click', () => {
-    if (currentUser) {
-      handleLogout();
-    } else {
-      openAuthModal('login');
-    }
-  });
+  if (authActionBtn) {
+    authActionBtn.addEventListener('click', () => {
+      if (currentUser) {
+        handleLogout();
+      } else {
+        openAuthModal('login');
+      }
+    });
+  }
 
-  navAuthBtn.addEventListener('click', () => {
-    if (currentUser) {
-      handleLogout();
-    } else {
-      openAuthModal('login');
-    }
-  });
+  if (navAuthBtn) {
+    navAuthBtn.addEventListener('click', () => {
+      if (currentUser) {
+        handleLogout();
+      } else {
+        openAuthModal('login');
+      }
+    });
+  }
 
-  closeAuthModalBtn.addEventListener('click', closeAuthModal);
-  authModal.addEventListener('click', (e) => {
-    if (e.target === authModal) closeAuthModal();
-  });
+  if (closeAuthModalBtn) closeAuthModalBtn.addEventListener('click', closeAuthModal);
+  if (authModal) {
+    authModal.addEventListener('click', (e) => {
+      if (e.target === authModal) closeAuthModal();
+    });
+  }
 
-  tabSignIn.addEventListener('click', () => switchAuthTab('login'));
-  tabSignUp.addEventListener('click', () => switchAuthTab('register'));
+  if (tabSignIn) tabSignIn.addEventListener('click', () => switchAuthTab('login'));
+  if (tabSignUp) tabSignUp.addEventListener('click', () => switchAuthTab('register'));
 
-  authForm.addEventListener('submit', handleAuthSubmit);
-  googleSignInBtn.addEventListener('click', handleGoogleSignIn);
-  guestModeBtn.addEventListener('click', handleGuestMode);
+  if (authForm) authForm.addEventListener('submit', handleAuthSubmit);
+  if (googleSignInBtn) googleSignInBtn.addEventListener('click', handleGoogleSignIn);
+  if (guestModeBtn) guestModeBtn.addEventListener('click', handleGuestMode);
 
   // Firebase Config Modal
-  firebaseConfigBtn.addEventListener('click', openFirebaseModal);
-  closeFirebaseModalBtn.addEventListener('click', closeFirebaseModal);
-  firebaseModal.addEventListener('click', (e) => {
-    if (e.target === firebaseModal) closeFirebaseModal();
-  });
-  saveFirebaseConfigBtn.addEventListener('click', handleSaveFirebaseConfig);
+  if (firebaseConfigBtn) firebaseConfigBtn.addEventListener('click', openFirebaseModal);
+  if (closeFirebaseModalBtn) closeFirebaseModalBtn.addEventListener('click', closeFirebaseModal);
+  if (firebaseModal) {
+    firebaseModal.addEventListener('click', (e) => {
+      if (e.target === firebaseModal) closeFirebaseModal();
+    });
+  }
+  if (saveFirebaseConfigBtn) saveFirebaseConfigBtn.addEventListener('click', handleSaveFirebaseConfig);
 
   // Lightbox Close
-  lightboxCloseBtn.addEventListener('click', closeLightbox);
-  lightboxModal.addEventListener('click', (e) => {
-    if (e.target === lightboxModal) closeLightbox();
-  });
+  if (lightboxCloseBtn) lightboxCloseBtn.addEventListener('click', closeLightbox);
+  if (lightboxModal) {
+    lightboxModal.addEventListener('click', (e) => {
+      if (e.target === lightboxModal) closeLightbox();
+    });
+  }
 }
 
-// --- Multimodal Photo Attachment & Preview ---
-function setupPhotoAttachmentListeners() {
-  attachImageBtn.addEventListener('click', () => imageFileInput.click());
+// --- Attachment Handlers (Feature 1: PDF/Doc + Photos) ---
+function setupAttachmentListeners() {
+  // Universal file button (PDFs, Docs, Images)
+  if (attachFileBtn && universalFileInput) {
+    attachFileBtn.addEventListener('click', () => universalFileInput.click());
+    universalFileInput.addEventListener('change', (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (file) handleUniversalFile(file);
+      universalFileInput.value = '';
+    });
+  }
 
-  imageFileInput.addEventListener('change', (e) => {
-    const file = e.target.files && e.target.files[0];
-    if (file) handleImageFile(file);
-    imageFileInput.value = '';
-  });
+  // Dedicated photo button
+  if (attachImageBtn && imageFileInput) {
+    attachImageBtn.addEventListener('click', () => imageFileInput.click());
+    imageFileInput.addEventListener('change', (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (file) handleImageFile(file);
+      imageFileInput.value = '';
+    });
+  }
 
-  removeImageBtn.addEventListener('click', clearAttachedImage);
+  if (removeImageBtn) {
+    removeImageBtn.addEventListener('click', clearAttachedMedia);
+  }
 
   // Drag and Drop support on chat input
   const dropZone = document.querySelector('.input-box-wrapper');
-  dropZone.addEventListener('dragover', (e) => {
-    e.preventDefault();
-    dropZone.classList.add('dragover');
-  });
+  if (dropZone) {
+    dropZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropZone.classList.add('dragover');
+    });
 
-  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
 
-  dropZone.addEventListener('drop', (e) => {
-    e.preventDefault();
-    dropZone.classList.remove('dragover');
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      const file = e.dataTransfer.files[0];
-      if (file.type.startsWith('image/')) {
-        handleImageFile(file);
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('dragover');
+      if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+        handleUniversalFile(e.dataTransfer.files[0]);
       }
-    }
-  });
+    });
+  }
 
   // Clipboard Paste support (Ctrl+V with image)
   document.addEventListener('paste', (e) => {
@@ -324,6 +451,7 @@ function setupPhotoAttachmentListeners() {
   });
 }
 
+// Compress images before storage/sending (<250KB)
 function compressImage(file, maxWidth = 1024, maxHeight = 1024, quality = 0.82) {
   return new Promise((resolve) => {
     const reader = new FileReader();
@@ -356,66 +484,119 @@ function compressImage(file, maxWidth = 1024, maxHeight = 1024, quality = 0.82) 
   });
 }
 
+// Handle Photo File
 async function handleImageFile(file) {
   if (!file.type.startsWith('image/')) {
-    alert('Please select a valid image file (PNG, JPG, WEBP, GIF).');
+    handleUniversalFile(file);
     return;
   }
 
-  // Auto-compress to optimal web size (< 300KB) for instant streaming and Firestore storage
+  clearAttachedMedia();
+
   try {
     currentAttachedImage = await compressImage(file);
-    imagePreviewImg.src = currentAttachedImage;
-    imagePreviewName.textContent = file.name || 'photo.jpg';
-    imagePreviewBadge.style.display = 'flex';
-    chatInput.focus();
+    if (imagePreviewImg) {
+      imagePreviewImg.src = currentAttachedImage;
+      imagePreviewImg.style.display = 'block';
+    }
+    if (docPreviewIcon) docPreviewIcon.style.display = 'none';
+    if (imagePreviewName) imagePreviewName.textContent = file.name || 'photo.jpg';
+    if (imagePreviewSub) imagePreviewSub.textContent = 'Photo ready to analyze with Gemini';
+    if (imagePreviewBadge) imagePreviewBadge.style.display = 'flex';
+    if (chatInput) chatInput.focus();
   } catch (err) {
-    console.warn('Compression error, fallback to raw data URL:', err);
+    console.warn('Image compression fallback:', err);
     const reader = new FileReader();
     reader.onload = (e) => {
       currentAttachedImage = e.target.result;
-      imagePreviewImg.src = currentAttachedImage;
-      imagePreviewName.textContent = file.name || 'photo.jpg';
-      imagePreviewBadge.style.display = 'flex';
-      chatInput.focus();
+      if (imagePreviewImg) {
+        imagePreviewImg.src = currentAttachedImage;
+        imagePreviewImg.style.display = 'block';
+      }
+      if (docPreviewIcon) docPreviewIcon.style.display = 'none';
+      if (imagePreviewName) imagePreviewName.textContent = file.name || 'photo.jpg';
+      if (imagePreviewSub) imagePreviewSub.textContent = 'Photo ready to analyze with Gemini';
+      if (imagePreviewBadge) imagePreviewBadge.style.display = 'flex';
+      if (chatInput) chatInput.focus();
     };
     reader.readAsDataURL(file);
   }
 }
 
-function clearAttachedImage() {
+// Handle Document or PDF File (Feature 1)
+function handleUniversalFile(file) {
+  if (!file) return;
+
+  if (file.type.startsWith('image/')) {
+    handleImageFile(file);
+    return;
+  }
+
+  const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+  const mimeType = isPdf ? 'application/pdf' : (file.type || 'text/plain');
+
+  // Document size limit check (8MB max for Gemini inlineData)
+  if (file.size > 8 * 1024 * 1024) {
+    alert('Document exceeds 8MB size limit. Please choose a smaller file.');
+    return;
+  }
+
+  clearAttachedMedia();
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    currentAttachedDoc = {
+      name: file.name,
+      mimeType: mimeType,
+      data: e.target.result,
+      size: formatFileSize(file.size)
+    };
+
+    if (imagePreviewImg) imagePreviewImg.style.display = 'none';
+    if (docPreviewIcon) {
+      docPreviewIcon.style.display = 'block';
+      docPreviewIcon.textContent = isPdf ? '📕' : '📄';
+    }
+    if (imagePreviewName) imagePreviewName.textContent = file.name;
+    if (imagePreviewSub) imagePreviewSub.textContent = `Document (${formatFileSize(file.size)}) ready to analyze`;
+    if (imagePreviewBadge) imagePreviewBadge.style.display = 'flex';
+    if (chatInput) chatInput.focus();
+  };
+  reader.readAsDataURL(file);
+}
+
+function clearAttachedMedia() {
   currentAttachedImage = null;
-  imagePreviewImg.src = '';
-  imagePreviewBadge.style.display = 'none';
+  currentAttachedDoc = null;
+  if (imagePreviewImg) {
+    imagePreviewImg.src = '';
+    imagePreviewImg.style.display = 'block';
+  }
+  if (docPreviewIcon) docPreviewIcon.style.display = 'none';
+  if (imagePreviewBadge) imagePreviewBadge.style.display = 'none';
+  if (imageFileInput) imageFileInput.value = '';
+  if (universalFileInput) universalFileInput.value = '';
 }
 
 // Lightbox for full-size viewing
 window.openImageLightbox = function(src) {
+  if (!lightboxModal) return;
   lightboxImage.src = src;
   lightboxDownloadBtn.href = src;
   lightboxModal.style.display = 'flex';
 };
 
 function closeLightbox() {
+  if (!lightboxModal) return;
   lightboxModal.style.display = 'none';
   lightboxImage.src = '';
 }
-
-// Default Firebase project configuration (chabita-ai-app)
-const DEFAULT_FIREBASE_CONFIG = {
-  apiKey: "AIzaSyCMRujz_3C36tE1P4Gpb53_gQ2zLUOQorc",
-  authDomain: "chabita-ai-app.firebaseapp.com",
-  projectId: "chabita-ai-app",
-  storageBucket: "chabita-ai-app.firebasestorage.app",
-  messagingSenderId: "1054117756725",
-  appId: "1:1054117756725:web:778bf73f4214d40e28567c"
-};
 
 // --- Firebase Initialization (Auth & Firestore) ---
 async function initFirebase() {
   let config = null;
 
-  // 1. Check local storage
+  // 1. Check local storage override
   const savedCfg = localStorage.getItem('chabita_firebase_config');
   if (savedCfg) {
     try {
@@ -441,7 +622,7 @@ async function initFirebase() {
     config = DEFAULT_FIREBASE_CONFIG;
   }
 
-  // 4. Initialize Firebase if config present
+  // 4. Initialize Firebase SDK if present
   if (config && config.apiKey && typeof firebase !== 'undefined') {
     try {
       if (!firebase.apps.length) {
@@ -453,10 +634,14 @@ async function initFirebase() {
       firestoreDb = firebase.firestore();
       isFirebaseEnabled = true;
 
-      storageSourceBadge.textContent = '🔥 Firestore';
-      storageSourceBadge.classList.add('firestore');
-      storageSourceBadge.title = 'Saved to Google Cloud Firestore';
-      firebaseStatusText.textContent = `Connected (${config.projectId})`;
+      if (storageSourceBadge) {
+        storageSourceBadge.textContent = '🔥 Firestore';
+        storageSourceBadge.classList.add('firestore');
+        storageSourceBadge.title = 'Saved to Google Cloud Firestore';
+      }
+      if (firebaseStatusText) {
+        firebaseStatusText.textContent = `Connected (${config.projectId})`;
+      }
 
       // Auth state listener
       firebaseAuth.onAuthStateChanged(async (user) => {
@@ -475,36 +660,40 @@ async function initFirebase() {
       return;
     } catch (err) {
       console.error('Firebase initialization error:', err);
-      firebaseStatusText.textContent = `Error: ${err.message}`;
+      if (firebaseStatusText) firebaseStatusText.textContent = `Error: ${err.message}`;
     }
   }
 
   // Fallback to local storage
   isFirebaseEnabled = false;
-  storageSourceBadge.textContent = 'Local';
-  storageSourceBadge.classList.remove('firestore');
-  storageSourceBadge.title = 'Saved locally in browser';
-  firebaseStatusText.textContent = 'Not connected (using local storage)';
+  if (storageSourceBadge) {
+    storageSourceBadge.textContent = 'Local';
+    storageSourceBadge.classList.remove('firestore');
+    storageSourceBadge.title = 'Saved locally in browser';
+  }
+  if (firebaseStatusText) {
+    firebaseStatusText.textContent = 'Not connected (using local storage)';
+  }
   loadHistoryFromLocalStorage();
 }
 
 function openFirebaseModal() {
   const saved = localStorage.getItem('chabita_firebase_config');
-  if (saved) {
+  if (saved && firebaseConfigInput) {
     firebaseConfigInput.value = saved;
   }
-  firebaseModal.style.display = 'flex';
+  if (firebaseModal) firebaseModal.style.display = 'flex';
 }
 
 function closeFirebaseModal() {
-  firebaseModal.style.display = 'none';
+  if (firebaseModal) firebaseModal.style.display = 'none';
 }
 
 async function handleSaveFirebaseConfig() {
   const raw = firebaseConfigInput.value.trim();
   if (!raw) {
     localStorage.removeItem('chabita_firebase_config');
-    alert('Firebase configuration cleared. Returning to local storage.');
+    alert('Firebase configuration cleared. Returning to default project.');
     closeFirebaseModal();
     location.reload();
     return;
@@ -515,7 +704,6 @@ async function handleSaveFirebaseConfig() {
     if (raw.startsWith('{')) {
       parsed = JSON.parse(raw);
     } else {
-      // Regex extract config object if user pasted the JS snippet
       const match = raw.match(/\{[\s\S]*?\}/);
       if (match) {
         parsed = JSON.parse(match[0].replace(/([a-zA-Z0-9]+):/g, '"$1":'));
@@ -568,7 +756,7 @@ async function loadFirestoreConversations() {
 }
 
 async function saveChatToStorage(chat) {
-  // Always update in-memory and local storage backup
+  // Update in-memory & local storage backup
   saveHistoryToLocalStorage();
 
   // If Firebase Firestore is active, sync to Cloud Firestore
@@ -577,6 +765,7 @@ async function saveChatToStorage(chat) {
       const chatDoc = {
         id: chat.id,
         title: chat.title || 'Untitled conversation',
+        pinned: Boolean(chat.pinned),
         updatedAt: new Date().toISOString(),
         messages: chat.messages
       };
@@ -653,6 +842,7 @@ function createNewChat() {
   const newChat = {
     id: 'chat_' + Date.now(),
     title: 'New conversation',
+    pinned: false,
     updatedAt: new Date().toISOString(),
     messages: []
   };
@@ -660,47 +850,158 @@ function createNewChat() {
   currentChatId = newChat.id;
   saveChatToStorage(newChat);
   renderCurrentChat();
-  chatInput.focus();
+  if (chatInput) chatInput.focus();
 }
 
 function getChat(id) {
   return conversations.find(c => c.id === id);
 }
 
+// --- Sidebar Chat History (Feature 5: Search, Pin & Inline Rename) ---
 function renderHistoryList() {
+  if (!chatHistoryList) return;
+
+  const query = (chatSearchTerm || '').toLowerCase().trim();
+  const filtered = conversations.filter(c => {
+    if (!query) return true;
+    return (c.title || '').toLowerCase().includes(query);
+  });
+
+  const pinnedList = filtered.filter(c => c.pinned);
+  const unpinnedList = filtered.filter(c => !c.pinned);
+
+  // 1. Render Pinned Chats Section
+  if (pinnedChatsSection && pinnedHistoryList) {
+    pinnedHistoryList.innerHTML = '';
+    if (pinnedList.length > 0) {
+      pinnedChatsSection.style.display = 'block';
+      pinnedList.forEach(chat => {
+        pinnedHistoryList.appendChild(createHistoryItemElement(chat));
+      });
+    } else {
+      pinnedChatsSection.style.display = 'none';
+    }
+  }
+
+  // 2. Render Recent/Unpinned Chats Section
   chatHistoryList.innerHTML = '';
-  conversations.forEach(chat => {
-    const item = document.createElement('div');
-    item.className = `history-item ${chat.id === currentChatId ? 'active' : ''}`;
-    
-    const titleSpan = document.createElement('span');
-    titleSpan.className = 'history-item-title';
-    titleSpan.textContent = chat.title || 'Untitled conversation';
+  if (unpinnedList.length === 0 && pinnedList.length === 0) {
+    const emptyNotice = document.createElement('div');
+    emptyNotice.style.padding = '14px 12px';
+    emptyNotice.style.fontSize = '0.82rem';
+    emptyNotice.style.color = 'var(--text-muted)';
+    emptyNotice.textContent = query ? 'No conversations found' : 'No conversations yet';
+    chatHistoryList.appendChild(emptyNotice);
+    return;
+  }
 
-    const deleteBtn = document.createElement('button');
-    deleteBtn.className = 'history-delete-btn';
-    deleteBtn.innerHTML = '✕';
-    deleteBtn.title = 'Delete conversation';
-    deleteBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      deleteChatFromStorage(chat.id);
-    });
+  unpinnedList.forEach(chat => {
+    chatHistoryList.appendChild(createHistoryItemElement(chat));
+  });
+}
 
-    item.appendChild(titleSpan);
-    item.appendChild(deleteBtn);
+function createHistoryItemElement(chat) {
+  const item = document.createElement('div');
+  item.className = `history-item ${chat.id === currentChatId ? 'active' : ''} ${chat.pinned ? 'pinned' : ''}`;
 
-    item.addEventListener('click', () => {
-      if (isStreaming) return;
-      currentChatId = chat.id;
-      saveHistoryToLocalStorage();
-      renderCurrentChat();
-      if (window.innerWidth <= 768) {
-        sidebar.classList.remove('open');
+  // Inline Rename Mode (Feature 5)
+  if (editingChatId === chat.id) {
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'inline-rename-input';
+    input.value = chat.title || 'Untitled conversation';
+
+    const finishEdit = async () => {
+      const newTitle = input.value.trim();
+      editingChatId = null;
+      if (newTitle && newTitle !== chat.title) {
+        chat.title = newTitle;
+        await saveChatToStorage(chat);
+      }
+      renderHistoryList();
+    };
+
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        finishEdit();
+      } else if (e.key === 'Escape') {
+        editingChatId = null;
+        renderHistoryList();
       }
     });
 
-    chatHistoryList.appendChild(item);
+    input.addEventListener('blur', finishEdit);
+    item.appendChild(input);
+
+    setTimeout(() => {
+      input.focus();
+      input.select();
+    }, 25);
+
+    return item;
+  }
+
+  // Normal Display Mode
+  const titleSpan = document.createElement('span');
+  titleSpan.className = 'history-item-title';
+  titleSpan.textContent = chat.title || 'Untitled conversation';
+  titleSpan.title = chat.title || 'Untitled conversation';
+
+  const actions = document.createElement('div');
+  actions.className = 'history-item-actions';
+
+  // Pin Toggle Button (Feature 5)
+  const pinBtn = document.createElement('button');
+  pinBtn.className = `history-action-icon-btn ${chat.pinned ? 'pinned' : ''}`;
+  pinBtn.innerHTML = chat.pinned ? '📌' : '📍';
+  pinBtn.title = chat.pinned ? 'Unpin conversation' : 'Pin conversation to top';
+  pinBtn.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    chat.pinned = !chat.pinned;
+    await saveChatToStorage(chat);
+    renderHistoryList();
   });
+
+  // Rename Button (Feature 5)
+  const renameBtn = document.createElement('button');
+  renameBtn.className = 'history-action-icon-btn';
+  renameBtn.innerHTML = '✏️';
+  renameBtn.title = 'Rename conversation';
+  renameBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    editingChatId = chat.id;
+    renderHistoryList();
+  });
+
+  // Delete Button
+  const deleteBtn = document.createElement('button');
+  deleteBtn.className = 'history-action-icon-btn';
+  deleteBtn.innerHTML = '✕';
+  deleteBtn.title = 'Delete conversation';
+  deleteBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    deleteChatFromStorage(chat.id);
+  });
+
+  actions.appendChild(pinBtn);
+  actions.appendChild(renameBtn);
+  actions.appendChild(deleteBtn);
+
+  item.appendChild(titleSpan);
+  item.appendChild(actions);
+
+  item.addEventListener('click', () => {
+    if (isStreaming || editingChatId) return;
+    currentChatId = chat.id;
+    saveHistoryToLocalStorage();
+    renderCurrentChat();
+    if (window.innerWidth <= 768 && sidebar) {
+      sidebar.classList.remove('open');
+    }
+  });
+
+  return item;
 }
 
 function clearAllChats() {
@@ -739,7 +1040,7 @@ async function handleAuthSubmit(e) {
   if (e) e.preventDefault();
   const email = authEmail.value.trim();
   const password = authPassword.value.trim();
-  const confirmPassword = authConfirmPassword.value.trim();
+  const confirmPassword = authConfirmPassword ? authConfirmPassword.value.trim() : '';
 
   authErrorBanner.style.display = 'none';
 
@@ -754,7 +1055,6 @@ async function handleAuthSubmit(e) {
   }
 
   if (!isFirebaseEnabled || !firebaseAuth) {
-    // Local demo / fallback login
     currentUser = email.split('@')[0];
     currentUserId = 'local_' + currentUser;
     updateAuthUI(currentUser);
@@ -793,7 +1093,7 @@ async function handleGuestMode() {
   currentUser = null;
   updateAuthUI(null);
   closeAuthModal();
-  chatInput.focus();
+  if (chatInput) chatInput.focus();
 }
 
 async function handleLogout() {
@@ -810,65 +1110,68 @@ async function handleLogout() {
 
 function updateAuthUI(username, photoURL = null) {
   if (username) {
-    if (photoURL) {
+    if (photoURL && userProfileAvatar) {
       userProfileAvatar.innerHTML = `<img src="${photoURL}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`;
-    } else {
+    } else if (userProfileAvatar) {
       userProfileAvatar.textContent = username.charAt(0).toUpperCase();
     }
-    userProfileName.textContent = username;
-    userProfileStatus.textContent = isFirebaseEnabled ? '🔥 Cloud Synced' : 'Signed In';
-    authActionBtn.textContent = 'Sign Out';
-    navAuthText.textContent = `Sign Out (${username})`;
+    if (userProfileName) userProfileName.textContent = username;
+    if (userProfileStatus) userProfileStatus.textContent = isFirebaseEnabled ? '🔥 Cloud Synced' : 'Signed In';
+    if (authActionBtn) authActionBtn.textContent = 'Sign Out';
+    if (navAuthText) navAuthText.textContent = `Sign Out (${username})`;
   } else {
-    userProfileAvatar.textContent = '🚀';
-    userProfileName.textContent = 'Guest User';
-    userProfileStatus.textContent = isFirebaseEnabled ? 'Anonymous Guest' : 'Local Storage';
-    authActionBtn.textContent = 'Sign In';
-    navAuthText.textContent = 'Sign In';
+    if (userProfileAvatar) userProfileAvatar.textContent = '🚀';
+    if (userProfileName) userProfileName.textContent = 'Guest User';
+    if (userProfileStatus) userProfileStatus.textContent = isFirebaseEnabled ? 'Anonymous Guest' : 'Local Storage';
+    if (authActionBtn) authActionBtn.textContent = 'Sign In';
+    if (navAuthText) navAuthText.textContent = 'Sign In';
   }
 }
 
 function openAuthModal(mode = 'login') {
+  if (!authModal) return;
   authErrorBanner.style.display = 'none';
   authErrorBanner.textContent = '';
   switchAuthTab(mode);
   authModal.style.display = 'flex';
-  authEmail.focus();
+  if (authEmail) authEmail.focus();
 }
 
 function closeAuthModal() {
-  authModal.style.display = 'none';
+  if (authModal) authModal.style.display = 'none';
 }
 
 function switchAuthTab(mode) {
   authModalMode = mode;
-  authErrorBanner.style.display = 'none';
+  if (authErrorBanner) authErrorBanner.style.display = 'none';
 
   if (mode === 'login') {
-    tabSignIn.classList.add('active');
-    tabSignUp.classList.remove('active');
-    authModalTitle.textContent = 'Welcome Back! 👋';
-    authModalSubtitle.textContent = 'Sign in with Google or Firebase to sync your chats';
-    confirmPasswordGroup.style.display = 'none';
-    authConfirmPassword.removeAttribute('required');
-    authSubmitBtn.textContent = 'Sign In';
+    if (tabSignIn) tabSignIn.classList.add('active');
+    if (tabSignUp) tabSignUp.classList.remove('active');
+    if (authModalTitle) authModalTitle.textContent = 'Welcome Back! 👋';
+    if (authModalSubtitle) authModalSubtitle.textContent = 'Sign in with Google or Firebase to sync your chats';
+    if (confirmPasswordGroup) confirmPasswordGroup.style.display = 'none';
+    if (authConfirmPassword) authConfirmPassword.removeAttribute('required');
+    if (authSubmitBtn) authSubmitBtn.textContent = 'Sign In';
   } else {
-    tabSignUp.classList.add('active');
-    tabSignIn.classList.remove('active');
-    authModalTitle.textContent = 'Create an Account 🌸';
-    authModalSubtitle.textContent = 'Join Chabita for a personalized AI experience';
-    confirmPasswordGroup.style.display = 'block';
-    authConfirmPassword.setAttribute('required', 'true');
-    authSubmitBtn.textContent = 'Create Account';
+    if (tabSignUp) tabSignUp.classList.add('active');
+    if (tabSignIn) tabSignIn.classList.remove('active');
+    if (authModalTitle) authModalTitle.textContent = 'Create an Account 🌸';
+    if (authModalSubtitle) authModalSubtitle.textContent = 'Join Chabita for a personalized AI experience';
+    if (confirmPasswordGroup) confirmPasswordGroup.style.display = 'block';
+    if (authConfirmPassword) authConfirmPassword.setAttribute('required', 'true');
+    if (authSubmitBtn) authSubmitBtn.textContent = 'Create Account';
   }
 }
 
 function showAuthError(msg) {
-  authErrorBanner.textContent = msg;
-  authErrorBanner.style.display = 'block';
+  if (authErrorBanner) {
+    authErrorBanner.textContent = msg;
+    authErrorBanner.style.display = 'block';
+  }
 }
 
-// --- Chat Rendering ---
+// --- Chat Rendering (Feature 1: Document Card + Photos) ---
 function renderCurrentChat() {
   const chat = getChat(currentChatId);
   messagesList.innerHTML = '';
@@ -878,7 +1181,7 @@ function renderCurrentChat() {
   } else {
     welcomeHero.style.display = 'none';
     chat.messages.forEach((msg, idx) => {
-      appendMessageToDOM(msg.role, msg.content, msg.image, idx);
+      appendMessageToDOM(msg.role, msg.content, msg.image, msg.document, idx);
     });
   }
 
@@ -886,7 +1189,7 @@ function renderCurrentChat() {
   renderHistoryList();
 }
 
-function appendMessageToDOM(role, content, image = null, index = null) {
+function appendMessageToDOM(role, content, image = null, documentData = null, index = null) {
   welcomeHero.style.display = 'none';
 
   const row = document.createElement('div');
@@ -906,7 +1209,23 @@ function appendMessageToDOM(role, content, image = null, index = null) {
   const bubble = document.createElement('div');
   bubble.className = 'message-bubble';
 
-  // Render Attached or Generated Image if present
+  // Render Attached Document Card (Feature 1)
+  if (documentData) {
+    const docCard = document.createElement('div');
+    docCard.className = 'chat-attached-doc-card';
+    const isPdf = (documentData.mimeType && documentData.mimeType.includes('pdf')) || (documentData.name && documentData.name.toLowerCase().endsWith('.pdf'));
+    const docIcon = isPdf ? '📕' : '📄';
+    docCard.innerHTML = `
+      <div class="doc-card-icon">${docIcon}</div>
+      <div class="doc-card-details">
+        <span class="doc-card-name" title="${escapeHtml(documentData.name || 'document')}">${escapeHtml(documentData.name || 'document')}</span>
+        <span class="doc-card-meta">${escapeHtml(documentData.mimeType || 'Document')} ${documentData.size ? '• ' + escapeHtml(documentData.size) : ''}</span>
+      </div>
+    `;
+    bubble.appendChild(docCard);
+  }
+
+  // Render Attached or Generated Image
   if (image) {
     const imgWrapper = document.createElement('div');
     imgWrapper.className = role === 'user' ? 'chat-attached-image-wrapper' : 'generated-image-card';
@@ -980,7 +1299,7 @@ async function handleGenerateImageAction(promptText) {
   renderCurrentChat();
 
   isStreaming = true;
-  sendBtn.disabled = true;
+  if (sendBtn) sendBtn.disabled = true;
 
   const { bubble, textDiv } = appendMessageToDOM('assistant', 'Generating your image, give me just a moment... 🎨');
   scrollToBottom();
@@ -997,11 +1316,9 @@ async function handleGenerateImageAction(promptText) {
       throw new Error(data.detail || 'Could not generate image');
     }
 
-    // Replace assistant response with final image
     const successText = `Here is your generated image for: **"${promptText}"** 🌸`;
     textDiv.innerHTML = marked.parse(successText);
 
-    // Add generated image card
     const card = document.createElement('div');
     card.className = 'generated-image-card';
     card.innerHTML = `
@@ -1025,24 +1342,25 @@ async function handleGenerateImageAction(promptText) {
     await saveChatToStorage(chat);
   } finally {
     isStreaming = false;
-    sendBtn.disabled = false;
+    if (sendBtn) sendBtn.disabled = false;
     scrollToBottom();
   }
 }
 
-// --- Multimodal Chat Streaming ---
+// --- Multimodal Chat Streaming (Feature 1: Documents & Photos) ---
 async function handleSendMessage() {
   const text = chatInput.value.trim();
   const photoToSend = currentAttachedImage;
+  const docToSend = currentAttachedDoc;
 
-  if ((!text && !photoToSend) || isStreaming) return;
+  if ((!text && !photoToSend && !docToSend) || isStreaming) return;
 
   const chat = getChat(currentChatId);
   if (!chat) return;
 
-  // Check for image generation commands
+  // Check for image generation prompt
   const lower = text.toLowerCase();
-  if (!photoToSend && (lower.startsWith('generate image') || lower.startsWith('draw a') || lower.startsWith('create an image of'))) {
+  if (!photoToSend && !docToSend && (lower.startsWith('generate image') || lower.startsWith('draw a') || lower.startsWith('create an image of'))) {
     const prompt = text.replace(/^(generate image of|generate image|draw a|draw|create an image of)/i, '').trim();
     if (prompt) {
       handleGenerateImageAction(prompt);
@@ -1050,27 +1368,42 @@ async function handleSendMessage() {
     }
   }
 
-  // Add User Message (Text + Photo)
-  chat.messages.push({
-    role: 'user',
-    content: text || (photoToSend ? 'Please analyze this image.' : ''),
-    image: photoToSend || null
-  });
-
-  if (chat.messages.length === 1) {
-    chat.title = text ? (text.slice(0, 30) + (text.length > 30 ? '...' : '')) : 'Photo Analysis';
+  // Determine message content
+  let defaultContent = '';
+  if (docToSend) {
+    defaultContent = `Please examine and analyze the attached document: ${docToSend.name}`;
+  } else if (photoToSend) {
+    defaultContent = 'Please analyze this photo.';
   }
 
-  // Clear Input & Attached Photo
+  chat.messages.push({
+    role: 'user',
+    content: text || defaultContent,
+    image: photoToSend || null,
+    document: docToSend || null
+  });
+
+  // Auto-generate title for first message
+  if (chat.messages.length === 1) {
+    if (text) {
+      chat.title = text.slice(0, 30) + (text.length > 30 ? '...' : '');
+    } else if (docToSend) {
+      chat.title = `📄 ${docToSend.name.slice(0, 24)}`;
+    } else {
+      chat.title = 'Photo Analysis';
+    }
+  }
+
+  // Clear Input & Attached Media
   chatInput.value = '';
-  clearAttachedImage();
+  clearAttachedMedia();
   autoResizeTextarea();
   await saveChatToStorage(chat);
   renderCurrentChat();
 
   // Assistant Streaming Bubble
   isStreaming = true;
-  sendBtn.disabled = true;
+  if (sendBtn) sendBtn.disabled = true;
 
   const { bubble, textDiv } = appendMessageToDOM('assistant', '');
   const typingCursor = document.createElement('span');
@@ -1085,7 +1418,8 @@ async function handleSendMessage() {
       messages: chat.messages.map(m => ({
         role: m.role,
         content: m.content,
-        image: m.image
+        image: m.image,
+        document: m.document
       })),
       mode: currentMode,
       temperature: 0.7
@@ -1137,9 +1471,9 @@ async function handleSendMessage() {
       }
     }
 
-    // Finalize
+    // Finalize message
     typingCursor.remove();
-    textDiv.innerHTML = marked.parse(accumulatedText || 'I am ready for your next request!');
+    textDiv.innerHTML = marked.parse(accumulatedText || 'I am ready for your next request! 🌸');
     chat.messages.push({ role: 'assistant', content: accumulatedText });
     await saveChatToStorage(chat);
     renderCurrentChat();
@@ -1153,18 +1487,134 @@ async function handleSendMessage() {
     await saveChatToStorage(chat);
   } finally {
     isStreaming = false;
-    sendBtn.disabled = false;
-    chatInput.focus();
+    if (sendBtn) sendBtn.disabled = false;
+    if (chatInput) chatInput.focus();
+  }
+}
+
+// --- Shareable Chat Links (Feature 3) ---
+async function handleShareChat() {
+  const chat = getChat(currentChatId);
+  if (!chat || chat.messages.length === 0) {
+    alert('Please start a conversation with at least one message before sharing! 🌸');
+    return;
+  }
+
+  // Create clean unique share ID
+  const shareId = 'share_' + Date.now().toString(36) + '_' + Math.random().toString(36).substring(2, 7);
+  const shareUrl = `${window.location.origin}${window.location.pathname}?share=${shareId}`;
+
+  shareLinkInput.value = 'Creating shareable link...';
+  shareModal.style.display = 'flex';
+
+  try {
+    if (isFirebaseEnabled && firestoreDb) {
+      // Save read-only public snapshot into shared_chats collection
+      const shareData = {
+        id: shareId,
+        title: chat.title || 'Shared Conversation with Chabita',
+        createdAt: new Date().toISOString(),
+        author: currentUser || 'Anonymous User',
+        messages: chat.messages.map(m => ({
+          role: m.role,
+          content: m.content || '',
+          image: m.image || null,
+          document: m.document ? {
+            name: m.document.name,
+            mimeType: m.document.mimeType,
+            size: m.document.size || ''
+          } : null
+        }))
+      };
+
+      await firestoreDb.collection('shared_chats').doc(shareId).set(shareData);
+      shareLinkInput.value = shareUrl;
+    } else {
+      shareLinkInput.value = shareUrl;
+    }
+  } catch (err) {
+    console.error('Error sharing chat:', err);
+    shareLinkInput.value = shareUrl;
+  }
+}
+
+function copyShareLink() {
+  if (!shareLinkInput.value || shareLinkInput.value.includes('Creating')) return;
+  navigator.clipboard.writeText(shareLinkInput.value).then(() => {
+    const origText = copyShareLinkBtn.textContent;
+    copyShareLinkBtn.textContent = 'Copied! ✨';
+    setTimeout(() => {
+      copyShareLinkBtn.textContent = origText;
+    }, 2000);
+  }).catch(() => {
+    shareLinkInput.select();
+    document.execCommand('copy');
+    copyShareLinkBtn.textContent = 'Copied! ✨';
+    setTimeout(() => {
+      copyShareLinkBtn.textContent = 'Copy Link';
+    }, 2000);
+  });
+}
+
+async function checkAndLoadSharedChat() {
+  const urlParams = new URLSearchParams(window.location.search);
+  const shareId = urlParams.get('share');
+  if (!shareId) return false;
+
+  isSharedView = true;
+  if (sharedChatBanner) sharedChatBanner.style.display = 'flex';
+
+  // Viewer read-only state
+  welcomeHero.style.display = 'none';
+  messagesList.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted);">Loading shared conversation... ✨</div>';
+
+  try {
+    let sharedChat = null;
+    if (firestoreDb) {
+      const docSnap = await firestoreDb.collection('shared_chats').doc(shareId).get();
+      if (docSnap.exists) {
+        sharedChat = docSnap.data();
+      }
+    }
+
+    if (!sharedChat) {
+      messagesList.innerHTML = `
+        <div style="text-align:center;padding:50px 20px;">
+          <div style="font-size:2.5rem;margin-bottom:12px;">🔍</div>
+          <h3>Shared Conversation Not Found</h3>
+          <p style="color:var(--text-muted);margin:8px 0 20px;">This share link may have expired or does not exist.</p>
+          <a href="/" class="shared-banner-action-btn" style="text-decoration:none;display:inline-block;">Start Your Own Chat 🌸</a>
+        </div>
+      `;
+      return true;
+    }
+
+    messagesList.innerHTML = '';
+    document.title = `${sharedChat.title || 'Shared Conversation'} - Chabita AI`;
+    if (currentModeLabel) currentModeLabel.textContent = 'Shared View (Read-Only)';
+
+    sharedChat.messages.forEach((msg, idx) => {
+      appendMessageToDOM(msg.role, msg.content, msg.image, msg.document, idx);
+    });
+
+    scrollToBottom();
+    return true;
+  } catch (err) {
+    console.error('Error loading shared chat:', err);
+    messagesList.innerHTML = `<div style="text-align:center;padding:40px;color:#ef4444;">Could not load shared conversation: ${err.message}</div>`;
+    return true;
   }
 }
 
 // --- Utilities ---
 function autoResizeTextarea() {
+  if (!chatInput) return;
   chatInput.style.height = 'auto';
   chatInput.style.height = Math.min(chatInput.scrollHeight, 160) + 'px';
 }
 
 function scrollToBottom() {
+  if (!chatContainer) return;
   chatContainer.scrollTop = chatContainer.scrollHeight;
 }
 
@@ -1272,8 +1722,15 @@ function exportConversation() {
   chat.messages.forEach(m => {
     const roleName = m.role === 'user' ? '👤 **You**' : '🌸 **Chabita**';
     md += `### ${roleName}\n\n`;
-    if (m.image) md += `![Attached Image](${m.image})\n\n`;
-    if (m.content) md += `${m.content}\n\n`;
+    if (m.document) {
+      md += `📎 **Attached Document:** ${m.document.name} (${m.document.mimeType || 'Document'})\n\n`;
+    }
+    if (m.image) {
+      md += `![Attached Image](${m.image})\n\n`;
+    }
+    if (m.content) {
+      md += `${m.content}\n\n`;
+    }
     md += `---\n\n`;
   });
 
@@ -1292,15 +1749,15 @@ function loadTheme() {
   const savedTheme = localStorage.getItem('chabita_theme') || 'light';
   if (savedTheme === 'dark') {
     document.body.classList.add('dark-mode');
-    themeIcon.textContent = '☀️';
+    if (themeIcon) themeIcon.textContent = '☀️';
   } else {
     document.body.classList.remove('dark-mode');
-    themeIcon.textContent = '🌙';
+    if (themeIcon) themeIcon.textContent = '🌙';
   }
 }
 
 function toggleTheme() {
   const isDark = document.body.classList.toggle('dark-mode');
   localStorage.setItem('chabita_theme', isDark ? 'dark' : 'light');
-  themeIcon.textContent = isDark ? '☀️' : '🌙';
+  if (themeIcon) themeIcon.textContent = isDark ? '☀️' : '🌙';
 }

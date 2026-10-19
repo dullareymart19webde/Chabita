@@ -6,6 +6,7 @@ import secrets
 import logging
 import urllib.parse
 import random
+import base64
 from typing import List, Optional
 from fastapi import FastAPI, HTTPException, Request, Header
 from fastapi.responses import StreamingResponse, JSONResponse
@@ -124,7 +125,9 @@ class AuthRequest(BaseModel):
 class MessageItem(BaseModel):
     role: str
     content: str
-    image: Optional[str] = None  # Base64 data URI
+    image: Optional[str] = None       # Base64 data URI
+    document: Optional[dict] = None    # {"name": str, "mimeType": str, "data": str}
+
 
 class ChatRequest(BaseModel):
     messages: List[MessageItem]
@@ -277,6 +280,49 @@ def format_gemini_contents(messages: List[MessageItem]):
                     })
                 except Exception as err:
                     logger.warning(f"Error parsing image part: {err}")
+
+        # Multimodal document attachment (PDF, TXT, CSV, MD, JSON)
+        if msg.document and isinstance(msg.document, dict):
+            raw_doc_data = msg.document.get("data", "")
+            doc_mime = msg.document.get("mimeType", "application/pdf")
+            doc_name = msg.document.get("name", "document.pdf")
+
+            if raw_doc_data:
+                try:
+                    if ";base64," in raw_doc_data:
+                        raw_doc_data = raw_doc_data.split(";base64,", 1)[1]
+                    
+                    clean_b64 = raw_doc_data.strip()
+                    lower_mime = (doc_mime or "").lower()
+                    lower_name = (doc_name or "").lower()
+
+                    # Text-based documents (txt, csv, md, json) are passed as text content
+                    if any(t in lower_mime for t in ["text/", "csv", "json", "markdown"]) or any(lower_name.endswith(ext) for ext in [".txt", ".csv", ".md", ".json"]):
+                        try:
+                            decoded_str = base64.b64decode(clean_b64).decode("utf-8", errors="replace")
+                            parts.append({
+                                "text": f"\n\n--- Attached Document Content ({doc_name}) ---\n{decoded_str}\n--- End of Document ---\n"
+                            })
+                        except Exception:
+                            parts.append({
+                                "inlineData": {
+                                    "mimeType": doc_mime,
+                                    "data": clean_b64
+                                }
+                            })
+                    else:
+                        # PDF and binary formats use native Gemini inlineData
+                        parts.append({
+                            "inlineData": {
+                                "mimeType": doc_mime or "application/pdf",
+                                "data": clean_b64
+                            }
+                        })
+
+                    if not content_text:
+                        parts.insert(0, {"text": f"Please examine and analyze the attached document: '{doc_name}'."})
+                except Exception as doc_err:
+                    logger.warning(f"Error parsing document part: {doc_err}")
 
         if not parts:
             continue

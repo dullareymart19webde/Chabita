@@ -46,7 +46,24 @@
         <span>New Conversation</span>
       </button>
 
+      <!-- Sidebar Search Box (Feature 5) -->
+      <div class="sidebar-search-box">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+        <input type="text" id="chatSearchInput" placeholder="Search conversations...">
+      </div>
+
       <div class="sidebar-history-section">
+        <!-- Pinned Chats Section (Feature 5) -->
+        <div id="pinnedChatsSection" style="display: none;">
+          <div class="history-section-header">
+            <span class="section-title">📌 Pinned</span>
+          </div>
+          <div class="chat-history-list" id="pinnedHistoryList"></div>
+        </div>
+
         <div class="history-section-header">
           <span class="section-title">Saved Chats</span>
           <span class="db-badge" id="storageSourceBadge" title="Chat storage location">Local</span>
@@ -92,6 +109,12 @@
 
     <!-- Main Chat Workspace -->
     <main class="main-content">
+      <!-- Shared Chat Banner (Feature 3) -->
+      <div class="shared-chat-banner" id="sharedChatBanner" style="display: none;">
+        <span>👀 You are viewing a shared conversation with Chabita</span>
+        <button class="shared-banner-action-btn" id="startOwnChatFromBannerBtn">Start Your Own Chat 🌸</button>
+      </div>
+
       <!-- Top Navbar -->
       <header class="top-nav">
         <div class="nav-left">
@@ -117,6 +140,18 @@
               <option value="detailed">Step-by-Step Deep Dive</option>
             </select>
           </div>
+
+          <!-- Share Chat Button (Feature 3) -->
+          <button class="action-pill-btn" id="shareChatBtn" title="Create a public shareable link">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="18" cy="5" r="3"></circle>
+              <circle cx="6" cy="12" r="3"></circle>
+              <circle cx="18" cy="19" r="3"></circle>
+              <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+              <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+            </svg>
+            <span>Share</span>
+          </button>
 
           <!-- Export Chat -->
           <button class="action-pill-btn" id="exportChatBtn" title="Export conversation as Markdown">
@@ -144,9 +179,17 @@
             <img src="favicon.svg" alt="Chabita Avatar" class="hero-avatar">
           </div>
           <h1 class="hero-title">Hi! I'm Chabita 👋</h1>
-          <p class="hero-subtitle">Your friendly AI assistant with multimodal vision and photo generation. What are we working on today?</p>
+          <p class="hero-subtitle">Your friendly AI assistant with multimodal vision, PDF document analysis, and photo generation. What are we working on today?</p>
           
           <div class="suggestion-cards-grid">
+            <div class="suggestion-card" data-prompt="Please summarize this PDF document and highlight the 3 most important takeaways." data-action="doc">
+              <div class="card-icon">📄</div>
+              <div class="card-text">
+                <strong>Analyze a PDF or Document</strong>
+                <p>Upload a PDF, notes, or paper to summarize</p>
+              </div>
+            </div>
+
             <div class="suggestion-card" data-prompt="Analyze this photo in detail and describe what you see." data-action="attach">
               <div class="card-icon">📷</div>
               <div class="card-text">
@@ -170,14 +213,6 @@
                 <p>Quantum computing in plain words</p>
               </div>
             </div>
-
-            <div class="suggestion-card" data-prompt="Help me write a friendly, polite email asking a client for project feedback.">
-              <div class="card-icon">📝</div>
-              <div class="card-text">
-                <strong>Polish an email</strong>
-                <p>Friendly client follow-up request</p>
-              </div>
-            </div>
           </div>
         </div>
 
@@ -187,29 +222,40 @@
 
       <!-- Bottom Input Area -->
       <footer class="input-area">
-        <!-- Image Preview Badge before sending -->
+        <!-- Attachment Preview Badge before sending (Feature 1) -->
         <div class="image-preview-badge" id="imagePreviewBadge" style="display: none;">
-          <img id="imagePreviewImg" src="" alt="Selected image">
-          <div class="image-preview-info">
-            <span id="imagePreviewName">photo.jpg</span>
-            <span class="image-preview-sub">Ready to analyze with Gemini Vision</span>
+          <div class="preview-thumb-wrap" id="previewThumbWrap">
+            <img id="imagePreviewImg" src="" alt="Selected attachment">
+            <span id="docPreviewIcon" style="display: none;">📄</span>
           </div>
-          <button class="remove-preview-btn" id="removeImageBtn" title="Remove attached photo">✕</button>
+          <div class="image-preview-info">
+            <span id="imagePreviewName">file.ext</span>
+            <span class="image-preview-sub" id="imagePreviewSub">Ready to analyze with Gemini</span>
+          </div>
+          <button class="remove-preview-btn" id="removeImageBtn" title="Remove attached file">✕</button>
         </div>
 
         <div class="input-box-wrapper">
           <textarea 
             id="chatInput" 
-            placeholder="Ask anything, describe an image to generate, or attach a photo..." 
+            placeholder="Ask anything, attach a PDF / photo, or describe an image to generate..." 
             rows="1"
           ></textarea>
           
           <div class="input-controls">
-            <!-- Hidden File Input for Image Attachment -->
+            <!-- Hidden Universal File Input for Photos and Documents (Feature 1) -->
+            <input type="file" id="universalFileInput" accept="image/*,.pdf,.txt,.md,.csv,.json" style="display: none;">
             <input type="file" id="imageFileInput" accept="image/*" style="display: none;">
 
-            <!-- Photo Upload Button -->
-            <button class="input-tool-btn" id="attachImageBtn" title="Attach a photo to analyze">
+            <!-- Universal File / PDF Attachment Button (Feature 1) -->
+            <button class="input-tool-btn" id="attachFileBtn" title="Attach PDF, document, or photo">
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path>
+              </svg>
+            </button>
+
+            <!-- Photo Upload Shortcut Button -->
+            <button class="input-tool-btn" id="attachImageBtn" title="Attach a photo">
               <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
                 <circle cx="8.5" cy="8.5" r="1.5"></circle>
@@ -244,7 +290,7 @@
           </div>
         </div>
         <div class="input-footer-note">
-          Chabita is powered by Gemini · Multimodal Vision & Firestore History ready.
+          Chabita is powered by Gemini · Multimodal Vision, PDF Analysis, & Firestore Sync ready.
         </div>
       </footer>
     </main>
@@ -322,6 +368,30 @@
     </div>
   </div>
 
+  <!-- Share Conversation Modal (Feature 3) -->
+  <div class="modal-backdrop" id="shareModal" style="display: none;">
+    <div class="modal-card">
+      <button class="modal-close-btn" id="closeShareModalBtn" title="Close modal">✕</button>
+      <div class="modal-header">
+        <div class="share-icon-wrap">🔗</div>
+        <h2>Share Conversation</h2>
+        <p>Anyone with this link will be able to read this conversation</p>
+      </div>
+
+      <div class="share-box">
+        <label for="shareLinkInput" style="font-size:0.8rem;font-weight:600;margin-bottom:6px;display:block;">Public Link</label>
+        <div class="share-input-wrapper">
+          <input type="text" id="shareLinkInput" readonly class="share-text-input">
+          <button class="copy-share-btn" id="copyShareLinkBtn">Copy Link</button>
+        </div>
+      </div>
+
+      <div class="share-security-notice">
+        🔒 <strong>Read-Only Link:</strong> Viewers cannot edit your chat or view any of your other private conversations.
+      </div>
+    </div>
+  </div>
+
   <!-- Firebase Setup Modal -->
   <div class="modal-backdrop" id="firebaseModal" style="display: none;">
     <div class="modal-card">
@@ -329,7 +399,7 @@
       <div class="modal-header">
         <div class="firebase-logo-wrap">🔥</div>
         <h2>Firebase Database & Auth</h2>
-        <p>Connect your Google Firebase project to store history in Firestore</p>
+        <p>Connected to Google Firebase project (chabita-ai-app)</p>
       </div>
 
       <div class="firebase-status-box" id="firebaseStatusBox">
@@ -340,25 +410,17 @@
       </div>
 
       <div class="form-group">
-        <label for="firebaseConfigInput">Paste Firebase Config (JSON or Web SDK snippet):</label>
-        <textarea id="firebaseConfigInput" class="styled-textarea" rows="6" placeholder='{
-  "apiKey": "AIzaSy...",
-  "authDomain": "your-app.firebaseapp.com",
-  "projectId": "your-app",
-  "storageBucket": "your-app.appspot.com",
-  "messagingSenderId": "123456789",
-  "appId": "1:123456:web:..."
-}'></textarea>
-        <span class="field-help">Found in your Firebase Console → Project Settings → General → Web apps.</span>
+        <label for="firebaseConfigInput">Firebase Web Config (JSON):</label>
+        <textarea id="firebaseConfigInput" class="styled-textarea" rows="6"></textarea>
       </div>
 
       <div class="modal-actions">
-        <button type="button" class="submit-auth-btn" id="saveFirebaseConfigBtn">Save & Connect Firebase</button>
+        <button type="button" class="submit-auth-btn" id="saveFirebaseConfigBtn">Save & Reconnect</button>
       </div>
     </div>
   </div>
 
-  <!-- Image Lightbox Modal (Fullscreen photo preview) -->
+  <!-- Image Lightbox Modal -->
   <div class="lightbox-modal" id="lightboxModal" style="display: none;">
     <button class="lightbox-close-btn" id="lightboxCloseBtn" title="Close view">✕</button>
     <div class="lightbox-content">
