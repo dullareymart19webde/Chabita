@@ -207,6 +207,71 @@ body {
   color: var(--primary);
 }
 
+/* Guest Mode History Notice in Sidebar */
+.guest-history-notice {
+  padding: 16px 12px;
+  background: var(--surface-bg);
+  border: 1px dashed var(--surface-border);
+  border-radius: var(--radius-md);
+  text-align: center;
+  margin: 6px 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.guest-notice-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--surface-border);
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.guest-notice-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.guest-notice-text strong {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.guest-notice-text p {
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+  margin: 0;
+}
+
+.guest-notice-signin-btn {
+  background: var(--primary);
+  color: #ffffff;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 7px 12px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: var(--transition);
+  margin-top: 2px;
+}
+
+.guest-notice-signin-btn:hover {
+  background: var(--primary-hover);
+  transform: translateY(-1px);
+}
+
 .sidebar-footer {
   border-top: 1px solid var(--surface-border);
   padding-top: 14px;

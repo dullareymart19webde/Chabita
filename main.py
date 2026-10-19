@@ -248,7 +248,7 @@ async def generate_image(req: ImageGenRequest):
 
     seed = random.randint(100000, 999999)
     encoded = urllib.parse.quote(prompt)
-    image_url = f"https://image.pollinations.ai/prompt/{encoded}?width=1024&height=1024&nologo=true&seed={seed}&model=flux"
+    image_url = f"https://image.pollinations.ai/prompt/{encoded}?width=1024&height=1024&nologo=true&seed={seed}&model=turbo"
 
     return {
         "success": True,

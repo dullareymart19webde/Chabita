@@ -858,7 +858,8 @@ async function initFirebase() {
       await new Promise((resolve) => {
         let isFirstCheckDone = false;
         firebaseAuth.onAuthStateChanged(async (user) => {
-          if (user) {
+          if (user && !user.isAnonymous) {
+            // Designated Authenticated Account
             currentUser = user.displayName || user.email || 'User';
             currentUserId = user.uid;
             localStorage.setItem('chabita_signed_in', 'true');
@@ -867,11 +868,17 @@ async function initFirebase() {
             closeAuthModal();
             await loadFirestoreConversations();
           } else {
+            // Guest Mode: no history is saved or seen
             currentUser = null;
             currentUserId = null;
             localStorage.removeItem('chabita_signed_in');
+            localStorage.removeItem('chabita_conversations');
+            localStorage.removeItem('chabita_current_id');
             updateAuthUI(null);
-            loadHistoryFromLocalStorage();
+            conversations = [];
+            currentChatId = null;
+            createNewChat();
+            renderHistoryList();
           }
           if (!isFirstCheckDone) {
             isFirstCheckDone = true;
@@ -893,14 +900,15 @@ async function initFirebase() {
     }
   }
 
-  // Fallback to local storage
+  // Fallback to Guest Mode if Cloud is unavailable
   isFirebaseEnabled = false;
-  if (storageSourceBadge) {
-    storageSourceBadge.textContent = 'Local';
-    storageSourceBadge.classList.remove('synced');
-    storageSourceBadge.title = 'Saved locally in browser';
-  }
-  loadHistoryFromLocalStorage();
+  currentUser = null;
+  currentUserId = null;
+  updateAuthUI(null);
+  conversations = [];
+  currentChatId = null;
+  createNewChat();
+  renderHistoryList();
 }
 
 // --- Cloud Database Syncing ---
@@ -920,7 +928,7 @@ async function loadFirestoreConversations() {
       conversations.push(docSnap.data());
     });
 
-    const lastId = localStorage.getItem('chabita_current_id');
+    const lastId = localStorage.getItem(`chabita_current_id_${currentUserId}`);
     currentChatId = lastId && getChat(lastId) ? lastId : (conversations.length > 0 ? conversations[0].id : null);
 
     if (!currentChatId || !getChat(currentChatId)) {
@@ -931,12 +939,28 @@ async function loadFirestoreConversations() {
     renderHistoryList();
   } catch (e) {
     console.error('Error loading chats from storage:', e);
-    loadHistoryFromLocalStorage();
+    try {
+      const cached = localStorage.getItem(`chabita_conversations_${currentUserId}`);
+      if (cached) {
+        conversations = JSON.parse(cached);
+        currentChatId = conversations.length > 0 ? conversations[0].id : null;
+        if (currentChatId) renderCurrentChat();
+        renderHistoryList();
+        return;
+      }
+    } catch (err) {}
+    createNewChat();
+    renderHistoryList();
   }
 }
 
 async function saveChatToStorage(chat) {
   if (!chat) return;
+
+  // In Guest Mode: do not persist to any account or local history
+  if (!currentUser || !currentUserId) {
+    return;
+  }
 
   // Clean messages: strip raw base64 data from documents to avoid exceeding quota
   const sanitizedMessages = (chat.messages || []).map(m => {
@@ -954,10 +978,7 @@ async function saveChatToStorage(chat) {
     };
   });
 
-  // Update local storage backup
-  saveHistoryToLocalStorage();
-
-  // If Cloud Database is active, sync to cloud
+  // Save directly to the designated user account in cloud
   if (isFirebaseEnabled && firestoreDb && currentUserId) {
     try {
       const chatDoc = {
@@ -977,58 +998,9 @@ async function saveChatToStorage(chat) {
       console.warn('Cloud sync warning:', err);
     }
   }
-}
 
-async function deleteChatFromStorage(id) {
-  conversations = conversations.filter(c => c.id !== id);
-  if (currentChatId === id) {
-    currentChatId = conversations.length > 0 ? conversations[0].id : null;
-    if (!currentChatId) {
-      createNewChat();
-      return;
-    }
-  }
-
-  saveHistoryToLocalStorage();
-  renderCurrentChat();
-
-  if (isFirebaseEnabled && firestoreDb && currentUserId) {
-    try {
-      await firestoreDb
-        .collection('users')
-        .doc(currentUserId)
-        .collection('conversations')
-        .doc(id)
-        .delete();
-    } catch (e) {
-      console.warn('Cloud delete warning:', e);
-    }
-  }
-}
-
-// --- Local Storage Fallback ---
-function loadHistoryFromLocalStorage() {
+  // Account-specific backup
   try {
-    const saved = localStorage.getItem('chabita_conversations');
-    conversations = saved ? JSON.parse(saved) : [];
-    const lastId = localStorage.getItem('chabita_current_id');
-    currentChatId = lastId || (conversations.length > 0 ? conversations[0].id : null);
-  } catch (e) {
-    console.error('Error loading local history:', e);
-    conversations = [];
-    currentChatId = null;
-  }
-  if (!currentChatId || !getChat(currentChatId)) {
-    createNewChat();
-  } else {
-    renderCurrentChat();
-  }
-  renderHistoryList();
-}
-
-function saveHistoryToLocalStorage() {
-  try {
-    // Sanitize conversations to never store megabytes of document base64 in localStorage
     const cleanConversations = conversations.map(c => ({
       ...c,
       messages: (c.messages || []).map(m => ({
@@ -1042,13 +1014,45 @@ function saveHistoryToLocalStorage() {
         } : null
       }))
     }));
-    localStorage.setItem('chabita_conversations', JSON.stringify(cleanConversations));
-    if (currentChatId) {
-      localStorage.setItem('chabita_current_id', currentChatId);
+    localStorage.setItem(`chabita_conversations_${currentUserId}`, JSON.stringify(cleanConversations));
+    localStorage.setItem(`chabita_current_id_${currentUserId}`, chat.id);
+  } catch (e) {}
+
+  renderHistoryList();
+}
+
+async function deleteChatFromStorage(id) {
+  conversations = conversations.filter(c => c.id !== id);
+  if (currentChatId === id) {
+    currentChatId = conversations.length > 0 ? conversations[0].id : null;
+    if (!currentChatId) {
+      createNewChat();
+      return;
     }
-  } catch (e) {
-    console.warn('Local storage save warning:', e);
   }
+
+  renderCurrentChat();
+
+  if (isFirebaseEnabled && firestoreDb && currentUserId) {
+    try {
+      await firestoreDb
+        .collection('users')
+        .doc(currentUserId)
+        .collection('conversations')
+        .doc(id)
+        .delete();
+    } catch (e) {
+      console.warn('Cloud delete warning:', err);
+    }
+  }
+
+  if (currentUserId) {
+    try {
+      localStorage.setItem(`chabita_conversations_${currentUserId}`, JSON.stringify(conversations));
+      if (currentChatId) localStorage.setItem(`chabita_current_id_${currentUserId}`, currentChatId);
+    } catch (e) {}
+  }
+
   renderHistoryList();
 }
 
@@ -1060,10 +1064,19 @@ function createNewChat() {
     updatedAt: new Date().toISOString(),
     messages: []
   };
-  conversations.unshift(newChat);
-  currentChatId = newChat.id;
-  saveChatToStorage(newChat);
+
+  if (currentUser && currentUserId) {
+    conversations.unshift(newChat);
+    currentChatId = newChat.id;
+    saveChatToStorage(newChat);
+  } else {
+    // In Guest Mode: active ephemeral session only, no saved history
+    conversations = [newChat];
+    currentChatId = newChat.id;
+  }
+
   renderCurrentChat();
+  renderHistoryList();
   if (chatInput) chatInput.focus();
 }
 
@@ -1074,6 +1087,46 @@ function getChat(id) {
 // --- Sidebar Chat History (Feature 5: Search, Pin & Inline Rename) ---
 function renderHistoryList() {
   if (!chatHistoryList) return;
+
+  // Guest Mode: NO history is seen!
+  if (!currentUser || !currentUserId) {
+    if (pinnedChatsSection) pinnedChatsSection.style.display = 'none';
+    chatHistoryList.innerHTML = `
+      <div class="guest-history-notice">
+        <div class="guest-notice-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+            <circle cx="12" cy="7" r="4"></circle>
+          </svg>
+        </div>
+        <div class="guest-notice-text">
+          <strong>Guest Mode Active</strong>
+          <p>History is disabled for guests. Sign in to your account to save and access your conversations anytime.</p>
+        </div>
+        <button class="guest-notice-signin-btn" onclick="openAuthModal('login')">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path>
+            <polyline points="10 17 15 12 10 7"></polyline>
+            <line x1="15" y1="12" x2="3" y2="12"></line>
+          </svg>
+          <span>Sign In to Save Chats</span>
+        </button>
+      </div>
+    `;
+    if (storageSourceBadge) {
+      storageSourceBadge.innerHTML = '<span>Guest</span>';
+      storageSourceBadge.classList.remove('synced');
+      storageSourceBadge.title = 'History is not saved in Guest Mode';
+    }
+    return;
+  }
+
+  // Account Mode: User is logged in, show their designated saved chats!
+  if (storageSourceBadge) {
+    storageSourceBadge.innerHTML = `${CLOUD_ICON_SVG}<span>Cloud</span>`;
+    storageSourceBadge.classList.add('synced');
+    storageSourceBadge.title = 'Saved securely in your cloud account';
+  }
 
   const query = (chatSearchTerm || '').toLowerCase().trim();
   const filtered = conversations.filter(c => {
@@ -1208,7 +1261,11 @@ function createHistoryItemElement(chat) {
   item.addEventListener('click', () => {
     if (isStreaming || editingChatId) return;
     currentChatId = chat.id;
-    saveHistoryToLocalStorage();
+    if (currentUserId) {
+      try {
+        localStorage.setItem(`chabita_current_id_${currentUserId}`, chat.id);
+      } catch (e) {}
+    }
     renderCurrentChat();
     if (window.innerWidth <= 768 && sidebar) {
       sidebar.classList.remove('open');
@@ -1218,13 +1275,37 @@ function createHistoryItemElement(chat) {
   return item;
 }
 
-function clearAllChats() {
-  if (confirm('Are you sure you want to clear all conversation history?')) {
+async function clearAllChats() {
+  if (!currentUser || !currentUserId) {
+    conversations = [];
+    currentChatId = null;
+    createNewChat();
+    return;
+  }
+
+  if (confirm('Are you sure you want to clear all conversation history from your account? This action cannot be undone.')) {
     if (isFirebaseEnabled && firestoreDb && currentUserId) {
-      conversations.forEach(c => {
-        firestoreDb.collection('users').doc(currentUserId).collection('conversations').doc(c.id).delete();
-      });
+      try {
+        const snapshot = await firestoreDb
+          .collection('users')
+          .doc(currentUserId)
+          .collection('conversations')
+          .get();
+        const batch = firestoreDb.batch();
+        snapshot.forEach(docSnap => {
+          batch.delete(docSnap.ref);
+        });
+        await batch.commit();
+      } catch (err) {
+        console.warn('Error clearing cloud conversations:', err);
+      }
     }
+
+    try {
+      localStorage.removeItem(`chabita_conversations_${currentUserId}`);
+      localStorage.removeItem(`chabita_current_id_${currentUserId}`);
+    } catch (e) {}
+
     conversations = [];
     currentChatId = null;
     createNewChat();
@@ -1306,27 +1387,58 @@ async function handleGuestMode() {
   localStorage.setItem('chabita_visited', 'true');
   if (isFirebaseEnabled && firebaseAuth) {
     try {
-      await firebaseAuth.signInAnonymously();
-    } catch (e) {
-      console.warn('Guest sign-in note:', e);
-    }
+      await firebaseAuth.signOut();
+    } catch (e) {}
   }
   currentUser = null;
+  currentUserId = null;
+  conversations = [];
+  currentChatId = null;
+
+  localStorage.removeItem('chabita_signed_in');
+  localStorage.removeItem('chabita_conversations');
+  localStorage.removeItem('chabita_current_id');
+
   updateAuthUI(null);
   closeAuthModal();
+  createNewChat();
+  renderHistoryList();
   if (chatInput) chatInput.focus();
 }
 
 async function handleLogout() {
-  if (confirm('Are you sure you want to sign out?')) {
-    if (isFirebaseEnabled && firebaseAuth) {
-      await firebaseAuth.signOut();
+  if (confirm('Are you sure you want to sign out? Your conversation history will remain safely saved in your account.')) {
+    // 1. Ensure any active conversation with messages is saved before signing out
+    if (currentUser && currentUserId && currentChatId) {
+      const activeChat = getChat(currentChatId);
+      if (activeChat && activeChat.messages && activeChat.messages.length > 0) {
+        try {
+          await saveChatToStorage(activeChat);
+        } catch (e) {}
+      }
     }
+
+    // 2. Sign out of authentication
+    if (isFirebaseEnabled && firebaseAuth) {
+      try {
+        await firebaseAuth.signOut();
+      } catch (e) {}
+    }
+
+    // 3. Purge user session and clear memory and unauthenticated local storage
     currentUser = null;
     currentUserId = null;
+    conversations = [];
+    currentChatId = null;
+
     localStorage.removeItem('chabita_signed_in');
+    localStorage.removeItem('chabita_conversations');
+    localStorage.removeItem('chabita_current_id');
+
+    // 4. Reset UI to clean Guest Mode with blank new conversation (no history seen)
     updateAuthUI(null);
-    loadHistoryFromLocalStorage();
+    createNewChat();
+    renderHistoryList();
   }
 }
 
