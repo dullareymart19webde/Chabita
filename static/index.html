@@ -89,11 +89,6 @@
           <span class="status-label" id="systemStatusLabel">Chabita is ready</span>
         </div>
         <div class="footer-actions">
-          <button class="icon-btn" id="firebaseConfigBtn" title="Configure Firebase Database & Auth">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path>
-            </svg>
-          </button>
           <button class="icon-btn" id="clearAllChatsBtn" title="Clear All History">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <polyline points="3 6 5 6 21 6"></polyline>
@@ -290,20 +285,20 @@
           </div>
         </div>
         <div class="input-footer-note">
-          Chabita is powered by Gemini · Multimodal Vision, PDF Analysis, & Firestore Sync ready.
+          Chabita is powered by Gemini · Multimodal Vision, PDF Analysis & Cloud Sync.
         </div>
       </footer>
     </main>
   </div>
 
-  <!-- Authentication Modal (Google & Email Firebase Auth) -->
+  <!-- Authentication Modal (Google & Email Account) -->
   <div class="modal-backdrop" id="authModal" style="display: none;">
     <div class="modal-card">
       <button class="modal-close-btn" id="closeAuthModalBtn" title="Close modal">✕</button>
       <div class="modal-header">
         <img src="favicon.svg" alt="Chabita" class="modal-avatar">
         <h2 id="authModalTitle">Welcome to Chabita</h2>
-        <p id="authModalSubtitle">Sign in with Google or Firebase to sync your chat history</p>
+        <p id="authModalSubtitle">Sign in with Google or your email to sync your chat history</p>
       </div>
 
       <!-- Google Sign In Button -->
@@ -388,34 +383,6 @@
 
       <div class="share-security-notice">
         🔒 <strong>Read-Only Link:</strong> Viewers cannot edit your chat or view any of your other private conversations.
-      </div>
-    </div>
-  </div>
-
-  <!-- Firebase Setup Modal -->
-  <div class="modal-backdrop" id="firebaseModal" style="display: none;">
-    <div class="modal-card">
-      <button class="modal-close-btn" id="closeFirebaseModalBtn" title="Close modal">✕</button>
-      <div class="modal-header">
-        <div class="firebase-logo-wrap">🔥</div>
-        <h2>Firebase Database & Auth</h2>
-        <p>Connected to Google Firebase project (chabita-ai-app)</p>
-      </div>
-
-      <div class="firebase-status-box" id="firebaseStatusBox">
-        <div class="status-row">
-          <strong>Status:</strong>
-          <span id="firebaseStatusText">Checking connection...</span>
-        </div>
-      </div>
-
-      <div class="form-group">
-        <label for="firebaseConfigInput">Firebase Web Config (JSON):</label>
-        <textarea id="firebaseConfigInput" class="styled-textarea" rows="6"></textarea>
-      </div>
-
-      <div class="modal-actions">
-        <button type="button" class="submit-auth-btn" id="saveFirebaseConfigBtn">Save & Reconnect</button>
       </div>
     </div>
   </div>

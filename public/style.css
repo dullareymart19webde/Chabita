@@ -1126,10 +1126,11 @@ body.dark-mode .form-error-banner {
   color: var(--text-muted);
 }
 
+.db-badge.synced,
 .db-badge.firestore {
-  background: #ffedd5;
-  color: #ea580c;
-  box-shadow: 0 0 6px rgba(234, 88, 12, 0.2);
+  background: rgba(16, 185, 129, 0.12);
+  color: #059669;
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.2);
 }
 
 /* Image Preview Badge in Input Area */

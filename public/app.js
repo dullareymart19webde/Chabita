@@ -115,13 +115,6 @@ const authSubmitBtn = document.getElementById('authSubmitBtn');
 const googleSignInBtn = document.getElementById('googleSignInBtn');
 const guestModeBtn = document.getElementById('guestModeBtn');
 
-// Firebase Config Modal DOM Elements
-const firebaseConfigBtn = document.getElementById('firebaseConfigBtn');
-const firebaseModal = document.getElementById('firebaseModal');
-const closeFirebaseModalBtn = document.getElementById('closeFirebaseModalBtn');
-const firebaseStatusText = document.getElementById('firebaseStatusText');
-const firebaseConfigInput = document.getElementById('firebaseConfigInput');
-const saveFirebaseConfigBtn = document.getElementById('saveFirebaseConfigBtn');
 
 // Default Firebase project configuration (chabita-ai-app)
 const DEFAULT_FIREBASE_CONFIG = {
@@ -372,15 +365,6 @@ function bindEventListeners() {
   if (googleSignInBtn) googleSignInBtn.addEventListener('click', handleGoogleSignIn);
   if (guestModeBtn) guestModeBtn.addEventListener('click', handleGuestMode);
 
-  // Firebase Config Modal
-  if (firebaseConfigBtn) firebaseConfigBtn.addEventListener('click', openFirebaseModal);
-  if (closeFirebaseModalBtn) closeFirebaseModalBtn.addEventListener('click', closeFirebaseModal);
-  if (firebaseModal) {
-    firebaseModal.addEventListener('click', (e) => {
-      if (e.target === firebaseModal) closeFirebaseModal();
-    });
-  }
-  if (saveFirebaseConfigBtn) saveFirebaseConfigBtn.addEventListener('click', handleSaveFirebaseConfig);
 
   // Lightbox Close
   if (lightboxCloseBtn) lightboxCloseBtn.addEventListener('click', closeLightbox);
@@ -635,18 +619,15 @@ async function initFirebase() {
       isFirebaseEnabled = true;
 
       if (storageSourceBadge) {
-        storageSourceBadge.textContent = '🔥 Firestore';
-        storageSourceBadge.classList.add('firestore');
-        storageSourceBadge.title = 'Saved to Google Cloud Firestore';
-      }
-      if (firebaseStatusText) {
-        firebaseStatusText.textContent = `Connected (${config.projectId})`;
+        storageSourceBadge.textContent = '☁️ Cloud';
+        storageSourceBadge.classList.add('synced');
+        storageSourceBadge.title = 'Saved securely in cloud';
       }
 
       // Auth state listener
       firebaseAuth.onAuthStateChanged(async (user) => {
         if (user) {
-          currentUser = user.displayName || user.email || 'Firebase User';
+          currentUser = user.displayName || user.email || 'User';
           currentUserId = user.uid;
           updateAuthUI(currentUser, user.photoURL);
           await loadFirestoreConversations();
@@ -659,8 +640,7 @@ async function initFirebase() {
       });
       return;
     } catch (err) {
-      console.error('Firebase initialization error:', err);
-      if (firebaseStatusText) firebaseStatusText.textContent = `Error: ${err.message}`;
+      console.error('Initialization error:', err);
     }
   }
 
@@ -668,60 +648,12 @@ async function initFirebase() {
   isFirebaseEnabled = false;
   if (storageSourceBadge) {
     storageSourceBadge.textContent = 'Local';
-    storageSourceBadge.classList.remove('firestore');
+    storageSourceBadge.classList.remove('synced');
     storageSourceBadge.title = 'Saved locally in browser';
-  }
-  if (firebaseStatusText) {
-    firebaseStatusText.textContent = 'Not connected (using local storage)';
   }
   loadHistoryFromLocalStorage();
 }
 
-function openFirebaseModal() {
-  const saved = localStorage.getItem('chabita_firebase_config');
-  if (saved && firebaseConfigInput) {
-    firebaseConfigInput.value = saved;
-  }
-  if (firebaseModal) firebaseModal.style.display = 'flex';
-}
-
-function closeFirebaseModal() {
-  if (firebaseModal) firebaseModal.style.display = 'none';
-}
-
-async function handleSaveFirebaseConfig() {
-  const raw = firebaseConfigInput.value.trim();
-  if (!raw) {
-    localStorage.removeItem('chabita_firebase_config');
-    alert('Firebase configuration cleared. Returning to default project.');
-    closeFirebaseModal();
-    location.reload();
-    return;
-  }
-
-  try {
-    let parsed = null;
-    if (raw.startsWith('{')) {
-      parsed = JSON.parse(raw);
-    } else {
-      const match = raw.match(/\{[\s\S]*?\}/);
-      if (match) {
-        parsed = JSON.parse(match[0].replace(/([a-zA-Z0-9]+):/g, '"$1":'));
-      }
-    }
-
-    if (!parsed || !parsed.apiKey) {
-      throw new Error('Missing apiKey or projectId in Firebase configuration.');
-    }
-
-    localStorage.setItem('chabita_firebase_config', JSON.stringify(parsed));
-    alert('Firebase configuration saved successfully! Reconnecting...');
-    closeFirebaseModal();
-    location.reload();
-  } catch (err) {
-    alert('Invalid configuration format: ' + err.message);
-  }
-}
 
 // --- Firestore Database Syncing ---
 async function loadFirestoreConversations() {
@@ -1020,7 +952,7 @@ function clearAllChats() {
 // --- Google & Email Authentication ---
 async function handleGoogleSignIn() {
   if (!isFirebaseEnabled || !firebaseAuth) {
-    showAuthError('Please connect your Firebase project first using the Firebase icon in the bottom left!');
+    showAuthError('Sign-in service is currently initializing. Please try again or continue as guest.');
     return;
   }
 
@@ -1116,13 +1048,13 @@ function updateAuthUI(username, photoURL = null) {
       userProfileAvatar.textContent = username.charAt(0).toUpperCase();
     }
     if (userProfileName) userProfileName.textContent = username;
-    if (userProfileStatus) userProfileStatus.textContent = isFirebaseEnabled ? '🔥 Cloud Synced' : 'Signed In';
+    if (userProfileStatus) userProfileStatus.textContent = isFirebaseEnabled ? '☁️ Cloud Synced' : 'Signed In';
     if (authActionBtn) authActionBtn.textContent = 'Sign Out';
     if (navAuthText) navAuthText.textContent = `Sign Out (${username})`;
   } else {
     if (userProfileAvatar) userProfileAvatar.textContent = '🚀';
     if (userProfileName) userProfileName.textContent = 'Guest User';
-    if (userProfileStatus) userProfileStatus.textContent = isFirebaseEnabled ? 'Anonymous Guest' : 'Local Storage';
+    if (userProfileStatus) userProfileStatus.textContent = 'Guest Mode';
     if (authActionBtn) authActionBtn.textContent = 'Sign In';
     if (navAuthText) navAuthText.textContent = 'Sign In';
   }
@@ -1149,7 +1081,7 @@ function switchAuthTab(mode) {
     if (tabSignIn) tabSignIn.classList.add('active');
     if (tabSignUp) tabSignUp.classList.remove('active');
     if (authModalTitle) authModalTitle.textContent = 'Welcome Back! 👋';
-    if (authModalSubtitle) authModalSubtitle.textContent = 'Sign in with Google or Firebase to sync your chats';
+    if (authModalSubtitle) authModalSubtitle.textContent = 'Sign in with Google or your email to sync your chats';
     if (confirmPasswordGroup) confirmPasswordGroup.style.display = 'none';
     if (authConfirmPassword) authConfirmPassword.removeAttribute('required');
     if (authSubmitBtn) authSubmitBtn.textContent = 'Sign In';
