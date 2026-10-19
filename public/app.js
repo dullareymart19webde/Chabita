@@ -396,6 +396,12 @@ function formatFileSize(bytes) {
 
 // --- Application Entry Point ---
 document.addEventListener('DOMContentLoaded', async () => {
+  // Purge any legacy unauthenticated conversations cache from previous versions
+  try {
+    localStorage.removeItem('chabita_conversations');
+    localStorage.removeItem('chabita_current_id');
+  } catch (e) {}
+
   loadTheme();
   setupSpeechRecognition();
   setupAttachmentListeners();
