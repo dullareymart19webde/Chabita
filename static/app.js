@@ -2,11 +2,11 @@
  * Chabita AI Assistant - Frontend Application
  * Full-featured Web AI Assistant:
  * - Feature 1: PDF & Document Analyzer (Gemini multimodal reading of PDFs, TXT, CSV, MD)
- * - Feature 3: Shareable Chat Links (Firestore shared_chats read-only public links)
+ * - Feature 3: Shareable Chat Links (read-only public links)
  * - Feature 5: Pin & Rename Chats + Sidebar Search
  * - Multimodal Vision (Photo analysis & display)
  * - AI Image Generation (with Pollinations fallback)
- * - Firebase Auth (Google & Email/Password & Guest Mode) + Cloud Firestore Database
+ * - Cloud Authentication (Google & Email/Password & Guest Mode) + Cloud Database
  */
 
 // --- Application State ---
@@ -26,7 +26,7 @@ let chatSearchTerm = '';
 let editingChatId = null;
 let isSharedView = false;
 
-// Firebase & Auth State
+// Cloud Auth & Database State
 let firebaseApp = null;
 let firebaseAuth = null;
 let firestoreDb = null;
@@ -115,8 +115,7 @@ const authSubmitBtn = document.getElementById('authSubmitBtn');
 const googleSignInBtn = document.getElementById('googleSignInBtn');
 const guestModeBtn = document.getElementById('guestModeBtn');
 
-
-// Default Firebase project configuration (chabita-ai-app)
+// Default Cloud Service Configuration
 const DEFAULT_FIREBASE_CONFIG = {
   apiKey: "AIzaSyCMRujz_3C36tE1P4Gpb53_gQ2zLUOQorc",
   authDomain: "chabita-ai-app.firebaseapp.com",
@@ -188,19 +187,25 @@ document.addEventListener('DOMContentLoaded', async () => {
   bindEventListeners();
   autoResizeTextarea();
 
-  // 1. Initialize Firebase (Auth & Firestore)
+  // 1. Initialize Cloud Auth & Database (Waits for session check)
   await initFirebase();
 
   // 2. Check if loading a shared conversation via ?share=<shareId>
   const isViewingShared = await checkAndLoadSharedChat();
   if (isViewingShared) return;
 
-  // 3. If first-time user (not logged in & hasn't clicked guest mode), show sign-in modal
+  // 3. Only show sign-in prompt on very first visit if user is not signed in
+  const hasVisited = localStorage.getItem('chabita_visited');
   const hasChosenGuest = localStorage.getItem('chabita_guest_mode');
-  if (!currentUser && !hasChosenGuest) {
+  const isSignedIn = currentUser || localStorage.getItem('chabita_signed_in');
+
+  if (!isSignedIn && !hasChosenGuest && !hasVisited) {
+    localStorage.setItem('chabita_visited', 'true');
     setTimeout(() => {
-      openAuthModal('login');
-    }, 450);
+      if (!currentUser && !isSharedView) {
+        openAuthModal('login');
+      }
+    }, 400);
   }
 });
 
@@ -259,7 +264,7 @@ function bindEventListeners() {
   }
   if (closeShareModalBtn) {
     closeShareModalBtn.addEventListener('click', () => {
-      shareModal.style.display = 'none';
+      if (shareModal) shareModal.style.display = 'none';
     });
   }
   if (copyShareLinkBtn) {
@@ -293,14 +298,14 @@ function bindEventListeners() {
     closeSidebarBtn.addEventListener('click', () => sidebar.classList.remove('open'));
   }
 
-  // Suggestion Cards
+  // Suggestion Cards (fixed action check for doc and attach)
   document.querySelectorAll('.suggestion-card').forEach(card => {
     card.addEventListener('click', () => {
       const prompt = card.getAttribute('data-prompt');
       const action = card.getAttribute('data-action');
-      if (action === 'attach') {
+      if (action === 'doc' || action === 'attach') {
         if (universalFileInput) universalFileInput.click();
-        chatInput.value = prompt;
+        if (prompt) chatInput.value = prompt;
         autoResizeTextarea();
       } else if (action === 'generate') {
         chatInput.value = prompt;
@@ -364,7 +369,6 @@ function bindEventListeners() {
   if (authForm) authForm.addEventListener('submit', handleAuthSubmit);
   if (googleSignInBtn) googleSignInBtn.addEventListener('click', handleGoogleSignIn);
   if (guestModeBtn) guestModeBtn.addEventListener('click', handleGuestMode);
-
 
   // Lightbox Close
   if (lightboxCloseBtn) lightboxCloseBtn.addEventListener('click', closeLightbox);
@@ -485,7 +489,7 @@ async function handleImageFile(file) {
     }
     if (docPreviewIcon) docPreviewIcon.style.display = 'none';
     if (imagePreviewName) imagePreviewName.textContent = file.name || 'photo.jpg';
-    if (imagePreviewSub) imagePreviewSub.textContent = 'Photo ready to analyze with Gemini';
+    if (imagePreviewSub) imagePreviewSub.textContent = 'Photo attached • Press Enter or Send to analyze';
     if (imagePreviewBadge) imagePreviewBadge.style.display = 'flex';
     if (chatInput) chatInput.focus();
   } catch (err) {
@@ -499,7 +503,7 @@ async function handleImageFile(file) {
       }
       if (docPreviewIcon) docPreviewIcon.style.display = 'none';
       if (imagePreviewName) imagePreviewName.textContent = file.name || 'photo.jpg';
-      if (imagePreviewSub) imagePreviewSub.textContent = 'Photo ready to analyze with Gemini';
+      if (imagePreviewSub) imagePreviewSub.textContent = 'Photo attached • Press Enter or Send to analyze';
       if (imagePreviewBadge) imagePreviewBadge.style.display = 'flex';
       if (chatInput) chatInput.focus();
     };
@@ -542,7 +546,7 @@ function handleUniversalFile(file) {
       docPreviewIcon.textContent = isPdf ? '📕' : '📄';
     }
     if (imagePreviewName) imagePreviewName.textContent = file.name;
-    if (imagePreviewSub) imagePreviewSub.textContent = `Document (${formatFileSize(file.size)}) ready to analyze`;
+    if (imagePreviewSub) imagePreviewSub.textContent = `Document (${formatFileSize(file.size)}) attached • Press Enter or Send to analyze`;
     if (imagePreviewBadge) imagePreviewBadge.style.display = 'flex';
     if (chatInput) chatInput.focus();
   };
@@ -576,7 +580,7 @@ function closeLightbox() {
   lightboxImage.src = '';
 }
 
-// --- Firebase Initialization (Auth & Firestore) ---
+// --- Cloud Auth & Storage Initialization ---
 async function initFirebase() {
   let config = null;
 
@@ -597,16 +601,16 @@ async function initFirebase() {
         config = data.config;
       }
     } catch (e) {
-      console.warn('Could not fetch server Firebase config:', e);
+      console.warn('Could not fetch server config:', e);
     }
   }
 
-  // 3. Fallback to default chabita-ai-app config
+  // 3. Fallback to default cloud configuration
   if (!config) {
     config = DEFAULT_FIREBASE_CONFIG;
   }
 
-  // 4. Initialize Firebase SDK if present
+  // 4. Initialize Cloud SDK if present
   if (config && config.apiKey && typeof firebase !== 'undefined') {
     try {
       if (!firebase.apps.length) {
@@ -618,29 +622,53 @@ async function initFirebase() {
       firestoreDb = firebase.firestore();
       isFirebaseEnabled = true;
 
+      // Enable local auth persistence
+      try {
+        await firebaseAuth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
+      } catch (e) {}
+
       if (storageSourceBadge) {
         storageSourceBadge.textContent = '☁️ Cloud';
         storageSourceBadge.classList.add('synced');
         storageSourceBadge.title = 'Saved securely in cloud';
       }
 
-      // Auth state listener
-      firebaseAuth.onAuthStateChanged(async (user) => {
-        if (user) {
-          currentUser = user.displayName || user.email || 'User';
-          currentUserId = user.uid;
-          updateAuthUI(currentUser, user.photoURL);
-          await loadFirestoreConversations();
-        } else {
-          currentUser = null;
-          currentUserId = null;
-          updateAuthUI(null);
-          loadHistoryFromLocalStorage();
-        }
+      // Wait for the initial authentication state resolution
+      await new Promise((resolve) => {
+        let isFirstCheckDone = false;
+        firebaseAuth.onAuthStateChanged(async (user) => {
+          if (user) {
+            currentUser = user.displayName || user.email || 'User';
+            currentUserId = user.uid;
+            localStorage.setItem('chabita_signed_in', 'true');
+            localStorage.setItem('chabita_visited', 'true');
+            updateAuthUI(currentUser, user.photoURL);
+            closeAuthModal();
+            await loadFirestoreConversations();
+          } else {
+            currentUser = null;
+            currentUserId = null;
+            localStorage.removeItem('chabita_signed_in');
+            updateAuthUI(null);
+            loadHistoryFromLocalStorage();
+          }
+          if (!isFirstCheckDone) {
+            isFirstCheckDone = true;
+            resolve();
+          }
+        });
+
+        // Safety timeout so page doesn't hang if offline
+        setTimeout(() => {
+          if (!isFirstCheckDone) {
+            isFirstCheckDone = true;
+            resolve();
+          }
+        }, 1200);
       });
       return;
     } catch (err) {
-      console.error('Initialization error:', err);
+      console.error('Cloud initialization error:', err);
     }
   }
 
@@ -654,8 +682,7 @@ async function initFirebase() {
   loadHistoryFromLocalStorage();
 }
 
-
-// --- Firestore Database Syncing ---
+// --- Cloud Database Syncing ---
 async function loadFirestoreConversations() {
   if (!firestoreDb || !currentUserId) return;
 
@@ -682,24 +709,42 @@ async function loadFirestoreConversations() {
     }
     renderHistoryList();
   } catch (e) {
-    console.error('Error loading chats from Firestore:', e);
+    console.error('Error loading chats from storage:', e);
     loadHistoryFromLocalStorage();
   }
 }
 
 async function saveChatToStorage(chat) {
-  // Update in-memory & local storage backup
+  if (!chat) return;
+
+  // Clean messages: strip raw base64 data from documents to avoid exceeding quota
+  const sanitizedMessages = (chat.messages || []).map(m => {
+    const cleanDoc = m.document ? {
+      name: m.document.name || 'document',
+      mimeType: m.document.mimeType || 'application/pdf',
+      size: m.document.size || ''
+    } : null;
+
+    return {
+      role: m.role,
+      content: m.content || '',
+      image: m.image || null,
+      document: cleanDoc
+    };
+  });
+
+  // Update local storage backup
   saveHistoryToLocalStorage();
 
-  // If Firebase Firestore is active, sync to Cloud Firestore
-  if (isFirebaseEnabled && firestoreDb && currentUserId && chat) {
+  // If Cloud Database is active, sync to cloud
+  if (isFirebaseEnabled && firestoreDb && currentUserId) {
     try {
       const chatDoc = {
         id: chat.id,
         title: chat.title || 'Untitled conversation',
         pinned: Boolean(chat.pinned),
         updatedAt: new Date().toISOString(),
-        messages: chat.messages
+        messages: sanitizedMessages
       };
       await firestoreDb
         .collection('users')
@@ -708,7 +753,7 @@ async function saveChatToStorage(chat) {
         .doc(chat.id)
         .set(chatDoc, { merge: true });
     } catch (err) {
-      console.warn('Firestore sync warning:', err);
+      console.warn('Cloud sync warning:', err);
     }
   }
 }
@@ -735,7 +780,7 @@ async function deleteChatFromStorage(id) {
         .doc(id)
         .delete();
     } catch (e) {
-      console.warn('Firestore delete warning:', e);
+      console.warn('Cloud delete warning:', e);
     }
   }
 }
@@ -762,11 +807,27 @@ function loadHistoryFromLocalStorage() {
 
 function saveHistoryToLocalStorage() {
   try {
-    localStorage.setItem('chabita_conversations', JSON.stringify(conversations));
+    // Sanitize conversations to never store megabytes of document base64 in localStorage
+    const cleanConversations = conversations.map(c => ({
+      ...c,
+      messages: (c.messages || []).map(m => ({
+        role: m.role,
+        content: m.content || '',
+        image: m.image || null,
+        document: m.document ? {
+          name: m.document.name || 'document',
+          mimeType: m.document.mimeType || 'application/pdf',
+          size: m.document.size || ''
+        } : null
+      }))
+    }));
+    localStorage.setItem('chabita_conversations', JSON.stringify(cleanConversations));
     if (currentChatId) {
       localStorage.setItem('chabita_current_id', currentChatId);
     }
-  } catch (e) {}
+  } catch (e) {
+    console.warn('Local storage save warning:', e);
+  }
   renderHistoryList();
 }
 
@@ -949,7 +1010,7 @@ function clearAllChats() {
   }
 }
 
-// --- Google & Email Authentication ---
+// --- Cloud Authentication Handlers ---
 async function handleGoogleSignIn() {
   if (!isFirebaseEnabled || !firebaseAuth) {
     showAuthError('Sign-in service is currently initializing. Please try again or continue as guest.');
@@ -960,6 +1021,8 @@ async function handleGoogleSignIn() {
     authSubmitBtn.disabled = true;
     const provider = new firebase.auth.GoogleAuthProvider();
     await firebaseAuth.signInWithPopup(provider);
+    localStorage.setItem('chabita_signed_in', 'true');
+    localStorage.setItem('chabita_visited', 'true');
     closeAuthModal();
   } catch (err) {
     showAuthError(err.message || 'Google Sign-In failed.');
@@ -989,6 +1052,8 @@ async function handleAuthSubmit(e) {
   if (!isFirebaseEnabled || !firebaseAuth) {
     currentUser = email.split('@')[0];
     currentUserId = 'local_' + currentUser;
+    localStorage.setItem('chabita_signed_in', 'true');
+    localStorage.setItem('chabita_visited', 'true');
     updateAuthUI(currentUser);
     closeAuthModal();
     return;
@@ -1003,6 +1068,8 @@ async function handleAuthSubmit(e) {
     } else {
       await firebaseAuth.signInWithEmailAndPassword(email, password);
     }
+    localStorage.setItem('chabita_signed_in', 'true');
+    localStorage.setItem('chabita_visited', 'true');
     closeAuthModal();
     authForm.reset();
   } catch (err) {
@@ -1015,11 +1082,12 @@ async function handleAuthSubmit(e) {
 
 async function handleGuestMode() {
   localStorage.setItem('chabita_guest_mode', 'true');
+  localStorage.setItem('chabita_visited', 'true');
   if (isFirebaseEnabled && firebaseAuth) {
     try {
       await firebaseAuth.signInAnonymously();
     } catch (e) {
-      console.warn('Anonymous auth note:', e);
+      console.warn('Guest sign-in note:', e);
     }
   }
   currentUser = null;
@@ -1035,6 +1103,7 @@ async function handleLogout() {
     }
     currentUser = null;
     currentUserId = null;
+    localStorage.removeItem('chabita_signed_in');
     updateAuthUI(null);
     loadHistoryFromLocalStorage();
   }
@@ -1071,6 +1140,7 @@ function openAuthModal(mode = 'login') {
 
 function closeAuthModal() {
   if (authModal) authModal.style.display = 'none';
+  localStorage.setItem('chabita_visited', 'true');
 }
 
 function switchAuthTab(mode) {
@@ -1105,13 +1175,18 @@ function showAuthError(msg) {
 
 // --- Chat Rendering (Feature 1: Document Card + Photos) ---
 function renderCurrentChat() {
-  const chat = getChat(currentChatId);
+  let chat = getChat(currentChatId);
+  if (!chat) {
+    chat = conversations.length > 0 ? conversations[0] : null;
+    if (chat) currentChatId = chat.id;
+  }
+
   messagesList.innerHTML = '';
 
   if (!chat || chat.messages.length === 0) {
-    welcomeHero.style.display = 'block';
+    if (welcomeHero) welcomeHero.style.display = 'block';
   } else {
-    welcomeHero.style.display = 'none';
+    if (welcomeHero) welcomeHero.style.display = 'none';
     chat.messages.forEach((msg, idx) => {
       appendMessageToDOM(msg.role, msg.content, msg.image, msg.document, idx);
     });
@@ -1122,7 +1197,7 @@ function renderCurrentChat() {
 }
 
 function appendMessageToDOM(role, content, image = null, documentData = null, index = null) {
-  welcomeHero.style.display = 'none';
+  if (welcomeHero) welcomeHero.style.display = 'none';
 
   const row = document.createElement('div');
   row.className = `message-row ${role}`;
@@ -1222,7 +1297,11 @@ function appendMessageToDOM(role, content, image = null, documentData = null, in
 
 // --- Image Generation Handler ---
 async function handleGenerateImageAction(promptText) {
-  const chat = getChat(currentChatId);
+  let chat = getChat(currentChatId);
+  if (!chat) {
+    createNewChat();
+    chat = getChat(currentChatId);
+  }
   if (!chat || isStreaming) return;
 
   chat.messages.push({ role: 'user', content: `🎨 Generate an image: "${promptText}"` });
@@ -1287,7 +1366,12 @@ async function handleSendMessage() {
 
   if ((!text && !photoToSend && !docToSend) || isStreaming) return;
 
-  const chat = getChat(currentChatId);
+  // Guarantee valid active conversation
+  let chat = getChat(currentChatId);
+  if (!chat) {
+    createNewChat();
+    chat = getChat(currentChatId);
+  }
   if (!chat) return;
 
   // Check for image generation prompt
@@ -1300,19 +1384,28 @@ async function handleSendMessage() {
     }
   }
 
-  // Determine message content
-  let defaultContent = '';
-  if (docToSend) {
-    defaultContent = `Please examine and analyze the attached document: ${docToSend.name}`;
-  } else if (photoToSend) {
-    defaultContent = 'Please analyze this photo.';
+  // Determine user message text
+  let contentText = text;
+  if (!contentText) {
+    if (docToSend) {
+      contentText = `Please examine and analyze the attached document: "${docToSend.name}"`;
+    } else if (photoToSend) {
+      contentText = 'Please analyze this photo in detail.';
+    }
   }
+
+  // Safe document metadata for chat history (without huge base64 string)
+  const docMetaForHistory = docToSend ? {
+    name: docToSend.name,
+    mimeType: docToSend.mimeType,
+    size: docToSend.size
+  } : null;
 
   chat.messages.push({
     role: 'user',
-    content: text || defaultContent,
+    content: contentText,
     image: photoToSend || null,
-    document: docToSend || null
+    document: docMetaForHistory
   });
 
   // Auto-generate title for first message
@@ -1326,11 +1419,13 @@ async function handleSendMessage() {
     }
   }
 
-  // Clear Input & Attached Media
+  // Immediately hide welcome hero and switch directly to conversation view!
+  if (welcomeHero) welcomeHero.style.display = 'none';
   chatInput.value = '';
   clearAttachedMedia();
   autoResizeTextarea();
-  await saveChatToStorage(chat);
+
+  // Render current chat immediately so user sees their message bubble right away!
   renderCurrentChat();
 
   // Assistant Streaming Bubble
@@ -1343,16 +1438,34 @@ async function handleSendMessage() {
   textDiv.appendChild(typingCursor);
   scrollToBottom();
 
+  // Save to storage safely in background without blocking UI
+  saveChatToStorage(chat).catch(err => console.warn('Background save note:', err));
+
   let accumulatedText = '';
 
   try {
+    // Pass raw data only for the newly attached document in the current turn
     const payload = {
-      messages: chat.messages.map(m => ({
-        role: m.role,
-        content: m.content,
-        image: m.image,
-        document: m.document
-      })),
+      messages: chat.messages.map((m, idx) => {
+        if (idx === chat.messages.length - 1 && docToSend) {
+          return {
+            role: m.role,
+            content: m.content,
+            image: m.image,
+            document: {
+              name: docToSend.name,
+              mimeType: docToSend.mimeType,
+              data: docToSend.data
+            }
+          };
+        }
+        return {
+          role: m.role,
+          content: m.content,
+          image: m.image,
+          document: m.document
+        };
+      }),
       mode: currentMode,
       temperature: 0.7
     };
@@ -1497,7 +1610,7 @@ async function checkAndLoadSharedChat() {
   if (sharedChatBanner) sharedChatBanner.style.display = 'flex';
 
   // Viewer read-only state
-  welcomeHero.style.display = 'none';
+  if (welcomeHero) welcomeHero.style.display = 'none';
   messagesList.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted);">Loading shared conversation... ✨</div>';
 
   try {
