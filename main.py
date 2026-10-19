@@ -4,6 +4,8 @@ import sqlite3
 import hashlib
 import secrets
 import logging
+import urllib.parse
+import random
 from typing import List, Optional
 from fastapi import FastAPI, HTTPException, Request, Header
 from fastapi.responses import StreamingResponse, JSONResponse
@@ -19,7 +21,7 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("chabita")
 
-app = FastAPI(title="Chabita AI Assistant", version="1.1.0")
+app = FastAPI(title="Chabita AI Assistant", version="1.2.0")
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 MODEL_NAME = os.getenv("DEFAULT_MODEL", "gemini-3.8-flash")
@@ -30,6 +32,9 @@ DB_PATH = os.path.join(os.path.dirname(__file__), "chabita.db")
 BASE_PERSONA = (
     "You are Chabita, a delightfully simple, warm, and highly user-friendly AI assistant. "
     "Your primary goal is to make complex tasks feel effortless for the user.\n\n"
+    "Key Capabilities:\n"
+    "- Multimodal Vision: You can view, analyze, describe, and answer questions about any photo or image the user attaches.\n"
+    "- Image Generation: You can help brainstorm, inspire, and create images for the user.\n\n"
     "Communication Style:\n"
     "- Keep it Simple: Use plain, conversational language. Avoid dense technical jargon, acronyms, "
     "or overly verbose explanations unless the user specifically asks for deep technical details.\n"
@@ -47,7 +52,7 @@ MODES = {
     "detailed": BASE_PERSONA + "\n\nAdditional Directive: Provide step-by-step deep dives, code explanations, and thorough examples while maintaining your friendly, accessible warmth."
 }
 
-# --- Database & Auth Setup ---
+# --- Database & Auth Setup (Fallback for local / guest accounts) ---
 def get_db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -72,7 +77,6 @@ def init_db():
                 FOREIGN KEY (user_id) REFERENCES users (id)
             )
         """)
-        # Create a friendly default demo account if no users exist
         cursor = conn.cursor()
         cursor.execute("SELECT COUNT(*) FROM users")
         if cursor.fetchone()[0] == 0:
@@ -83,7 +87,6 @@ def init_db():
                 ("demo", pwd_hash, salt)
             )
             conn.commit()
-            logger.info("Created default demo user: username='demo', password='chabita123'")
 
 init_db()
 
@@ -121,13 +124,44 @@ class AuthRequest(BaseModel):
 class MessageItem(BaseModel):
     role: str
     content: str
+    image: Optional[str] = None  # Base64 data URI
 
 class ChatRequest(BaseModel):
     messages: List[MessageItem]
     mode: Optional[str] = "warm_simple"
     temperature: Optional[float] = 0.7
 
-# --- Auth Endpoints ---
+class ImageGenRequest(BaseModel):
+    prompt: str
+
+# --- Firebase Configuration Endpoint ---
+@app.get("/api/firebase-config")
+async def get_firebase_config():
+    raw_json = os.getenv("FIREBASE_CONFIG")
+    if raw_json:
+        try:
+            cfg = json.loads(raw_json)
+            return {"configured": True, "config": cfg}
+        except Exception:
+            pass
+
+    api_key = os.getenv("FIREBASE_API_KEY")
+    project_id = os.getenv("FIREBASE_PROJECT_ID")
+    if api_key and project_id:
+        return {
+            "configured": True,
+            "config": {
+                "apiKey": api_key,
+                "authDomain": os.getenv("FIREBASE_AUTH_DOMAIN", f"{project_id}.firebaseapp.com"),
+                "projectId": project_id,
+                "storageBucket": os.getenv("FIREBASE_STORAGE_BUCKET", f"{project_id}.appspot.com"),
+                "messagingSenderId": os.getenv("FIREBASE_MESSAGING_SENDER_ID", ""),
+                "appId": os.getenv("FIREBASE_APP_ID", "")
+            }
+        }
+    return {"configured": False, "config": None}
+
+# --- Auth Endpoints (Local Fallback) ---
 @app.post("/api/auth/register")
 async def register(req: AuthRequest):
     username = req.username.strip()
@@ -202,25 +236,61 @@ async def health_check():
         "configured": has_key
     }
 
+# --- Image Generation Endpoint ---
+@app.post("/api/generate-image")
+async def generate_image(req: ImageGenRequest):
+    prompt = req.prompt.strip()
+    if not prompt:
+        raise HTTPException(status_code=400, detail="Please enter a description for the image.")
+
+    seed = random.randint(100000, 999999)
+    encoded = urllib.parse.quote(prompt)
+    image_url = f"https://image.pollinations.ai/prompt/{encoded}?width=1024&height=1024&nologo=true&seed={seed}&model=flux"
+
+    return {
+        "success": True,
+        "prompt": prompt,
+        "image_url": image_url
+    }
+
 def format_gemini_contents(messages: List[MessageItem]):
     gemini_contents = []
     for msg in messages:
         role = "model" if msg.role in ("assistant", "model") else "user"
-        content_text = msg.content.strip()
-        if not content_text:
+        parts = []
+
+        content_text = (msg.content or "").strip()
+        if content_text:
+            parts.append({"text": content_text})
+
+        # Multimodal image attachment
+        if msg.image and isinstance(msg.image, str):
+            if msg.image.startswith("data:") and ";base64," in msg.image:
+                try:
+                    header, b64_data = msg.image.split(";base64,", 1)
+                    mime_type = header.replace("data:", "").split(";")[0] or "image/jpeg"
+                    parts.append({
+                        "inlineData": {
+                            "mimeType": mime_type,
+                            "data": b64_data.strip()
+                        }
+                    })
+                except Exception as err:
+                    logger.warning(f"Error parsing image part: {err}")
+
+        if not parts:
             continue
-        if gemini_contents and gemini_contents[-1]["role"] == role:
-            gemini_contents[-1]["parts"][0]["text"] += "\n\n" + content_text
-        else:
-            gemini_contents.append({
-                "role": role,
-                "parts": [{"text": content_text}]
-            })
+
+        gemini_contents.append({
+            "role": role,
+            "parts": parts
+        })
+
     if gemini_contents and gemini_contents[0]["role"] != "user":
         gemini_contents.insert(0, {"role": "user", "parts": [{"text": "Hello"}]})
     return gemini_contents
 
-# --- Chat Endpoints ---
+# --- Multimodal Streaming Chat Endpoint ---
 @app.post("/api/chat")
 async def chat_stream(request: ChatRequest):
     api_key = os.getenv("GEMINI_API_KEY", GEMINI_API_KEY)
@@ -251,7 +321,7 @@ async def chat_stream(request: ChatRequest):
 
     async def sse_generator():
         try:
-            async with httpx.AsyncClient(timeout=60.0) as client:
+            async with httpx.AsyncClient(timeout=90.0) as client:
                 async with client.stream("POST", url, json=payload) as response:
                     if response.status_code != 200:
                         error_body = await response.aread()
@@ -295,34 +365,6 @@ async def chat_stream(request: ChatRequest):
             "X-Accel-Buffering": "no"
         }
     )
-
-@app.post("/api/chat/sync")
-async def chat_sync(request: ChatRequest):
-    api_key = os.getenv("GEMINI_API_KEY", GEMINI_API_KEY)
-    if not api_key:
-        raise HTTPException(status_code=500, detail="Gemini API Key is not configured.")
-
-    system_instruction = MODES.get(request.mode, BASE_PERSONA)
-    contents = format_gemini_contents(request.messages)
-
-    payload = {
-        "contents": contents,
-        "systemInstruction": {"parts": [{"text": system_instruction}]},
-        "generationConfig": {"temperature": request.temperature or 0.7}
-    }
-
-    url = f"{BASE_GEMINI_URL}/models/{MODEL_NAME}:generateContent?key={api_key}"
-
-    async with httpx.AsyncClient(timeout=45.0) as client:
-        res = await client.post(url, json=payload)
-        if res.status_code != 200:
-            raise HTTPException(status_code=res.status_code, detail="AI engine request failed")
-        data = res.json()
-        candidates = data.get("candidates", [])
-        if not candidates:
-            return {"reply": "I couldn't generate a response. Please try rephrasing your message!"}
-        text = candidates[0].get("content", {}).get("parts", [{}])[0].get("text", "")
-        return {"reply": text}
 
 # Mount static files (Frontend)
 public_dir = os.path.join(os.path.dirname(__file__), "public")
