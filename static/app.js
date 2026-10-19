@@ -401,6 +401,16 @@ function closeLightbox() {
   lightboxImage.src = '';
 }
 
+// Default Firebase project configuration (chabita-ai-app)
+const DEFAULT_FIREBASE_CONFIG = {
+  apiKey: "AIzaSyCMRujz_3C36tE1P4Gpb53_gQ2zLUOQorc",
+  authDomain: "chabita-ai-app.firebaseapp.com",
+  projectId: "chabita-ai-app",
+  storageBucket: "chabita-ai-app.firebasestorage.app",
+  messagingSenderId: "1054117756725",
+  appId: "1:1054117756725:web:778bf73f4214d40e28567c"
+};
+
 // --- Firebase Initialization (Auth & Firestore) ---
 async function initFirebase() {
   let config = null;
@@ -426,7 +436,12 @@ async function initFirebase() {
     }
   }
 
-  // 3. Initialize Firebase if config present
+  // 3. Fallback to default chabita-ai-app config
+  if (!config) {
+    config = DEFAULT_FIREBASE_CONFIG;
+  }
+
+  // 4. Initialize Firebase if config present
   if (config && config.apiKey && typeof firebase !== 'undefined') {
     try {
       if (!firebase.apps.length) {
