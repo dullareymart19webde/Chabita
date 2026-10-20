@@ -962,15 +962,80 @@ body {
   }
 
   .top-nav {
-    padding: 0 14px;
+    padding: 0 10px;
+    padding-top: env(safe-area-inset-top, 0px);
+    gap: 6px;
+  }
+
+  .nav-left {
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  .assistant-name {
+    font-size: 0.95rem;
+  }
+
+  /* Hide redundant mode pill on mobile to prevent collision with persona dropdown */
+  .assistant-mode-pill {
+    display: none !important;
+  }
+
+  .nav-right {
+    gap: 6px;
+    flex-shrink: 1;
+  }
+
+  .styled-select {
+    max-width: 140px;
+    padding: 6px 8px;
+    font-size: 0.78rem;
+    text-overflow: ellipsis;
+  }
+
+  /* Make header action pills compact on mobile */
+  .action-pill-btn {
+    padding: 6px 8px;
+    font-size: 0.78rem;
+    gap: 4px;
+  }
+
+  #shareChatBtn span,
+  #exportChatBtn span {
+    display: none;
   }
 
   .input-area {
-    padding: 10px 14px 14px 14px;
+    padding: 8px 12px max(12px, env(safe-area-inset-bottom, 12px)) 12px;
+  }
+
+  .input-box-wrapper {
+    padding: 8px 12px;
+  }
+
+  #chatInput {
+    font-size: 0.92rem;
+    padding: 2px 4px 2px 0;
+  }
+
+  .input-controls {
+    gap: 4px;
+    margin-left: 4px;
+  }
+
+  .input-tool-btn {
+    padding: 6px;
   }
 
   .message-content-wrapper {
-    max-width: 90%;
+    max-width: 92%;
+  }
+}
+
+@media (max-width: 480px) {
+  .styled-select {
+    max-width: 125px;
+    font-size: 0.75rem;
   }
 }
 

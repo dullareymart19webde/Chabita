@@ -25,7 +25,7 @@ logger = logging.getLogger("chabita")
 app = FastAPI(title="Chabita AI Assistant", version="1.2.0")
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
-MODEL_NAME = os.getenv("DEFAULT_MODEL", "gemini-3.8-flash")
+MODEL_NAME = os.getenv("DEFAULT_MODEL", "gemini-3.5-flash")
 BASE_GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta"
 DB_PATH = os.path.join(os.path.dirname(__file__), "chabita.db")
 
@@ -363,40 +363,59 @@ async def chat_stream(request: ChatRequest):
         }
     }
 
-    url = f"{BASE_GEMINI_URL}/models/{MODEL_NAME}:streamGenerateContent?alt=sse&key={api_key}"
+    models_to_try = [MODEL_NAME]
+    for fallback_candidate in ["gemini-3.5-flash", "gemini-3.5-flash-lite"]:
+        if fallback_candidate not in models_to_try:
+            models_to_try.append(fallback_candidate)
 
     async def sse_generator():
+        streamed_any_text = False
         try:
-            async with httpx.AsyncClient(timeout=90.0) as client:
-                async with client.stream("POST", url, json=payload) as response:
-                    if response.status_code != 200:
-                        error_body = await response.aread()
-                        logger.error(f"Gemini API returned status {response.status_code}: {error_body.decode(errors='ignore')}")
-                        yield f"data: {json.dumps({'error': 'Oh no! I had a little hiccup connecting with the AI engine. Please verify the API key or try again in a moment.'})}\n\n"
+            async with httpx.AsyncClient(timeout=40.0) as client:
+                for idx, current_model in enumerate(models_to_try):
+                    url = f"{BASE_GEMINI_URL}/models/{current_model}:streamGenerateContent?alt=sse&key={api_key}"
+                    try:
+                        async with client.stream("POST", url, json=payload) as response:
+                            if response.status_code != 200:
+                                error_body = await response.aread()
+                                logger.warning(f"Gemini API model {current_model} returned {response.status_code}: {error_body.decode(errors='ignore')}")
+                                if idx < len(models_to_try) - 1 and not streamed_any_text:
+                                    logger.info(f"Falling back to {models_to_try[idx+1]}...")
+                                    continue
+                                yield f"data: {json.dumps({'error': 'Oh no! I had a little hiccup connecting with the AI engine. Please verify the API key or try again in a moment.'})}\n\n"
+                                yield "data: [DONE]\n\n"
+                                return
+
+                            async for line in response.aiter_lines():
+                                if not line:
+                                    continue
+                                if line.startswith("data:"):
+                                    raw_data = line[5:].strip()
+                                    try:
+                                        data_obj = json.loads(raw_data)
+                                        candidates = data_obj.get("candidates", [])
+                                        if candidates:
+                                            parts = candidates[0].get("content", {}).get("parts", [])
+                                            text_chunk = "".join(p.get("text", "") for p in parts if "text" in p)
+                                            if text_chunk:
+                                                streamed_any_text = True
+                                                yield f"data: {json.dumps({'text': text_chunk})}\n\n"
+                                    except Exception as parse_err:
+                                        logger.warning(f"Failed to parse SSE chunk: {parse_err}")
+
+                            # Successfully completed stream
+                            yield "data: [DONE]\n\n"
+                            return
+
+                    except (httpx.TimeoutException, httpx.RequestError) as net_err:
+                        logger.warning(f"Connection/timeout error on {current_model}: {net_err}")
+                        if idx < len(models_to_try) - 1 and not streamed_any_text:
+                            logger.info(f"Falling back to {models_to_try[idx+1]} due to network/timeout error...")
+                            continue
+                        yield f"data: {json.dumps({'error': 'The request timed out. Chabita is ready when you want to try again!'})}\n\n"
                         yield "data: [DONE]\n\n"
                         return
 
-                    async for line in response.aiter_lines():
-                        if not line:
-                            continue
-                        if line.startswith("data:"):
-                            raw_data = line[5:].strip()
-                            try:
-                                data_obj = json.loads(raw_data)
-                                candidates = data_obj.get("candidates", [])
-                                if candidates:
-                                    parts = candidates[0].get("content", {}).get("parts", [])
-                                    text_chunk = "".join(p.get("text", "") for p in parts if "text" in p)
-                                    if text_chunk:
-                                        yield f"data: {json.dumps({'text': text_chunk})}\n\n"
-                            except Exception as parse_err:
-                                logger.warning(f"Failed to parse SSE chunk: {parse_err}")
-
-            yield "data: [DONE]\n\n"
-
-        except httpx.TimeoutException:
-            yield f"data: {json.dumps({'error': 'The request timed out. Chabita is ready when you want to try again!'})}\n\n"
-            yield "data: [DONE]\n\n"
         except Exception as e:
             logger.exception("Unexpected error in chat streaming")
             yield f"data: {json.dumps({'error': f'Something unexpected happened: {str(e)}'})}\n\n"
